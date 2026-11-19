@@ -5,9 +5,7 @@ An end-to-end IoT embedded solution for real-time indoor air quality monitoring,
 
 ---
 
-## 🔌 Updated Hardware Pinout (Streamlined Setup)
-
-*Optimized for breadboard space: physical OLED and LEDs are replaced by the Web Visualization Dashboard, eliminating loose wiring.*
+## 🔌 Complete System Pinout Matrix
 
 | Component | Pin | ESP32 Pin | Purpose & Description |
 | :--- | :--- | :--- | :--- |
@@ -19,7 +17,13 @@ An end-to-end IoT embedded solution for real-time indoor air quality monitoring,
 | **MQ-135** | **V (Power)** | **5V (VIN)** | Heater coil requires 5V to maintain 200°C operational temp |
 | **Active Buzzer** | **P (Positive +)** | **GPIO 21** | Audible siren during critical gas concentration |
 | **Active Buzzer** | **Negative (-)** | **GND** | Common system ground |
-| **Visual Dashboard**| **Web App** | **Web / Wi-Fi** | Replaces physical OLED & LEDs; displays live graphs, gauges & alerts |
+| **Green LED (Safe)** | **Anode (+)** | **GPIO 18** | Connected via 220Ω resistor. Active HIGH during Normal safe status |
+| **Green LED (Safe)** | **Cathode (-)** | **GND** | Common system ground |
+| **Red LED (Alert)** | **Anode (+)** | **GPIO 19** | Connected via 220Ω resistor. Steady on Warning; flashes during Alert |
+| **Red LED (Alert)** | **Cathode (-)** | **GND** | Common system ground |
+| **0.96" OLED (SSD1306)** | **SDA (Data)** | **GPIO 22** | Custom I2C data wire |
+| **0.96" OLED (SSD1306)** | **SCL (Clock)** | **GPIO 23** | Custom I2C clock wire |
+| **0.96" OLED (SSD1306)** | **VCC & GND** | **3.3V & GND**| 3.3V I2C display power rail |
 
 ---
 
@@ -28,7 +32,7 @@ An end-to-end IoT embedded solution for real-time indoor air quality monitoring,
 ```
 c:\airquality\
 ├── esp32_firmware/
-│   ├── esp32_air_quality.ino        # Standalone Firmware (Sensors, Buzzer + On-board Web Server)
+│   ├── esp32_air_quality.ino        # Full Standalone Firmware (Sensors, OLED, LEDs, Buzzer + On-board Web Server)
 │   └── esp32_cloud_uploader.ino     # Cloud Uploader Firmware (Pushes JSON telemetry to Render/Web)
 │
 ├── web_dashboard/                   # Responsive Real-Time Web Application

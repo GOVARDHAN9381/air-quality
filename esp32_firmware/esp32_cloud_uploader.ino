@@ -1,43 +1,55 @@
 /*
  * =========================================================================================
  * Project: ESP32 Cloud Uploader - Real-Time Air Quality Telemetry to Web
+ * Uploads Analog Sensor Data (MQ-135, DHT11) to Cloud Server or Local Web Server
  * 
- * Hardware Connections (Streamlined Breadboard Setup):
- *   - DHT11 Sensor:      GND -> GND, VCC -> 3.3V, DATA -> GPIO 12
- *   - MQ-135 Gas Sensor: GND -> GND, VCC -> 5V,   A0 -> GPIO 34 (via voltage divider)
- *   - Active Buzzer:     Negative (-) -> GND,     Positive (+) -> GPIO 21
- * 
- * Note: OLED and physical LEDs are omitted to save breadboard space.
- * All visual monitoring, gauges, and warning indicators are displayed in real-time
- * on the Web Dashboard!
+ * Hardware Connections:
+ *   - DHT11 Sensor:        GND -> GND, VCC -> 3.3V, DATA (D) -> GPIO 12
+ *   - MQ-135 Gas Sensor:   GND -> GND, VCC -> 5V,   A0 -> GPIO 34 (via 10k/20k voltage divider)
+ *   - Active Buzzer:       Negative (-) -> GND,     Positive (P) -> GPIO 21
+ *   - Green LED (Safe):    Cathode (-) -> GND,      Anode (+) -> GPIO 18 (via 220-330 ohm resistor)
+ *   - Red LED (Warning):   Cathode (-) -> GND,      Anode (+) -> GPIO 19 (via 220-330 ohm resistor)
+ *   - 0.96" OLED Display:  GND -> GND, VCC -> 3.3V, SDA -> GPIO 22, SCL -> GPIO 23
  * =========================================================================================
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <DHT.h>
 
 // ================= PINS CONFIGURATION =================
 #define PIN_MQ135         34  // Analog Input (ADC1_CH6 via voltage divider)
 #define PIN_DHT           12  // Digital pin for DHT11
-#define PIN_BUZZER        21  // Active Buzzer Positive
+#define PIN_BUZZER        21  // Active Buzzer Positive (P)
+#define PIN_LED_GREEN     18  // Normal Condition Green LED
+#define PIN_LED_RED       19  // Warning / Alert Red LED
+#define PIN_OLED_SDA      22  // OLED I2C SDA
+#define PIN_OLED_SCL      23  // OLED I2C SCL
 
 #define DHTTYPE           DHT11
+#define SCREEN_WIDTH      128
+#define SCREEN_HEIGHT     64
+#define OLED_RESET        -1
+#define SCREEN_I2C_ADDR   0x3C
 
 // ================= NETWORK & CLOUD CONFIGURATION =================
 const char* wifi_ssid     = "YOUR_WIFI_NAME";     // <-- Enter your Wi-Fi SSID
 const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Enter your Wi-Fi Password
 
-// Cloud / Local Server Endpoint
-// E.g.: "https://your-render-app.onrender.com/api/telemetry" or "http://192.168.1.50:3000/api/telemetry"
+// Cloud / Local Server Endpoint (Render or Local Node/Python server)
 const char* cloudServerUrl = "https://your-render-app.onrender.com/api/telemetry";
 
 // Thresholds
-int thresholdWarning = 1300;   // Warning Level -> Web dashboard flags Yellow
-int thresholdAlert   = 2100;   // Critical Level -> Buzzer sounds + Web flags Red
+int thresholdWarning = 1300;   // Warning Level -> Red LED ON, Web Warning
+int thresholdAlert   = 2100;   // Critical Level -> Red LED Flashing + Buzzer Siren
 
 // Hardware Objects
 DHT dht(PIN_DHT, DHTTYPE);
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+bool oledAvailable = false;
 
 // Telemetry state variables
 int rawAdc = 0;
@@ -45,7 +57,7 @@ float voltage = 0.0;
 int estimatedPpm = 400;
 float temperatureC = 0.0;
 float humidityPct = 0.0;
-String systemStatus = "NORMAL"; // NORMAL | WARNING | ALERT
+String systemStatus = "NORMAL";
 
 unsigned long lastUploadTime = 0;
 const unsigned long UPLOAD_INTERVAL = 2000; // 2 seconds between cloud pushes
@@ -90,6 +102,8 @@ void sendTelemetryToCloud() {
   jsonPayload += "\"temp\":" + String(isnan(temperatureC) ? 0.0 : temperatureC, 1) + ",";
   jsonPayload += "\"hum\":" + String(isnan(humidityPct) ? 0.0 : humidityPct, 1) + ",";
   jsonPayload += "\"status\":\"" + systemStatus + "\",";
+  jsonPayload += "\"green\":" + String(systemStatus == "NORMAL" ? 1 : 0) + ",";
+  jsonPayload += "\"red\":" + String(systemStatus != "NORMAL" ? 1 : 0) + ",";
   jsonPayload += "\"buzz\":" + String(systemStatus == "ALERT" ? 1 : 0);
   jsonPayload += "}";
 
@@ -104,40 +118,103 @@ void sendTelemetryToCloud() {
   http.end();
 }
 
-// Update Buzzer and System Condition
-void updateBuzzerAndStatus() {
+// Update LEDs, Buzzer and System Condition
+void updateActuatorsAndStatus() {
   if (rawAdc >= thresholdAlert) {
     systemStatus = "ALERT";
+    digitalWrite(PIN_LED_GREEN, LOW);
     // Intermittent alarm pulsing
     if (millis() - buzzerBlinkTime > 300) {
       buzzerBlinkTime = millis();
       buzzerToggle = !buzzerToggle;
+      digitalWrite(PIN_LED_RED, buzzerToggle ? HIGH : LOW);
       digitalWrite(PIN_BUZZER, buzzerToggle ? HIGH : LOW);
     }
   } else if (rawAdc >= thresholdWarning) {
     systemStatus = "WARNING";
+    digitalWrite(PIN_LED_GREEN, LOW);
+    digitalWrite(PIN_LED_RED, HIGH);
     digitalWrite(PIN_BUZZER, LOW);
   } else {
     systemStatus = "NORMAL";
+    digitalWrite(PIN_LED_GREEN, HIGH);
+    digitalWrite(PIN_LED_RED, LOW);
     digitalWrite(PIN_BUZZER, LOW);
   }
+}
+
+// Update OLED Display (If attached)
+void updateOLED() {
+  if (!oledAvailable) return;
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.print("CLOUD IOT [");
+  display.print(systemStatus);
+  display.print("]");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+
+  display.setCursor(0, 15);
+  display.print("Gas ADC: ");
+  display.print(rawAdc);
+  display.print(" (");
+  display.print(estimatedPpm);
+  display.print("ppm)");
+
+  display.setCursor(0, 28);
+  display.print("Temp: ");
+  display.print(temperatureC, 1);
+  display.print(" C");
+
+  display.setCursor(0, 41);
+  display.print("Hum:  ");
+  display.print(humidityPct, 1);
+  display.print(" %");
+
+  display.drawLine(0, 53, 127, 53, SSD1306_WHITE);
+  display.setCursor(0, 56);
+  display.print(WiFi.status() == WL_CONNECTED ? "WiFi: Connected" : "WiFi: Reconnecting");
+
+  display.display();
 }
 
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n--- ESP32 Air Quality Monitoring (Streamlined Setup) ---");
+  Serial.println("\n--- ESP32 Cloud Air Quality Monitor Starting ---");
 
-  // Buzzer Setup
+  // Actuator Pins Setup
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_LED_RED, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
+
+  digitalWrite(PIN_LED_GREEN, HIGH);
+  digitalWrite(PIN_LED_RED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
+
+  // Initialize Custom I2C (SDA = GPIO 22, SCL = GPIO 23)
+  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
+
+  // Initialize OLED (Graceful fallback if not connected)
+  if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR)) {
+    oledAvailable = true;
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(10, 25);
+    display.println("Connecting Cloud...");
+    display.display();
+  }
 
   // Initialize DHT11
   dht.begin();
 
   // Configure ADC for MQ-135 on GPIO 34
-  analogReadResolution(12); // 12-bit: 0 - 4095
-  analogSetAttenuation(ADC_11db); // 0 - 3.3V
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
 
   // Connect to Wi-Fi
   WiFi.mode(WIFI_STA);
@@ -160,7 +237,7 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // 1. Read Sensors every 2 seconds
+  // 1. Read Sensors every 2 seconds & push to cloud
   if (now - lastUploadTime >= UPLOAD_INTERVAL) {
     lastUploadTime = now;
 
@@ -180,8 +257,10 @@ void loop() {
     } else {
       sendTelemetryToCloud();
     }
+
+    updateOLED();
   }
 
-  // 2. Actuator logic (Buzzer alarm)
-  updateBuzzerAndStatus();
+  // 2. Actuator logic (LEDs and Buzzer)
+  updateActuatorsAndStatus();
 }

@@ -236,63 +236,63 @@
         </div>
       </div>
 
-      <!-- Card 4: Hardware Actuators & System Status -->
+      <!-- Card 4: Hardware Actuators & Output State -->
       <div class="metric-card card-actuators">
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon"><i class="fa-solid fa-sliders"></i></div>
             <div>
-              <h3>Hardware Connections & Actuators</h3>
-              <p class="subtitle">Streamlined Setup (No Breadboard Clutter)</p>
+              <h3>Hardware Indicators & Actuators</h3>
+              <p class="subtitle">ESP32 Actuator System Status</p>
             </div>
           </div>
-          <span class="badge badge-online">ONLINE</span>
+          <span class="badge badge-online">ACTIVE</span>
         </div>
 
         <div class="actuator-list">
+          <!-- Green LED -->
+          <div class="actuator-item">
+            <div class="actuator-info">
+              <span class="indicator-led led-green" id="ledGreenIndicator"></span>
+              <div>
+                <strong>Green LED (GPIO 18)</strong>
+                <p>Normal Air Quality Indicator</p>
+              </div>
+            </div>
+            <span class="state-pill state-on" id="greenLedState">ON</span>
+          </div>
+
+          <!-- Red LED -->
+          <div class="actuator-item">
+            <div class="actuator-info">
+              <span class="indicator-led led-red off" id="ledRedIndicator"></span>
+              <div>
+                <strong>Red LED (GPIO 19)</strong>
+                <p>Warning / Alert Indicator</p>
+              </div>
+            </div>
+            <span class="state-pill state-off" id="redLedState">OFF</span>
+          </div>
+
           <!-- Buzzer -->
           <div class="actuator-item">
             <div class="actuator-info">
               <i class="fa-solid fa-bell actuator-icon" id="buzzerIcon"></i>
               <div>
                 <strong>Active Buzzer (GPIO 21)</strong>
-                <p>Audible Siren Alarm (Active on Critical)</p>
+                <p>Audible Siren Alarm (Active on Alert)</p>
               </div>
             </div>
             <span class="state-pill state-off" id="buzzerState">SILENT</span>
           </div>
 
-          <!-- Web Visual Warning Hub (Replaces OLED & LEDs) -->
+          <!-- OLED Display -->
           <div class="actuator-item">
             <div class="actuator-info">
-              <span class="indicator-led led-green" id="ledGreenIndicator"></span>
+              <i class="fa-solid fa-tv actuator-icon text-cyan"></i>
               <div>
-                <strong>Virtual Visual Indicators</strong>
-                <p>Web Dashboard Replaces Physical LEDs &amp; OLED</p>
-              </div>
-            </div>
-            <span class="state-pill state-on" id="greenLedState">NORMAL</span>
-          </div>
-
-          <!-- MQ-135 Pin -->
-          <div class="actuator-item">
-            <div class="actuator-info">
-              <i class="fa-solid fa-smog actuator-icon text-cyan"></i>
-              <div>
-                <strong>MQ-135 Gas Sensor</strong>
-                <p>A0 &rarr; GPIO 34 (via Voltage Divider), VCC &rarr; 5V</p>
-              </div>
-            </div>
-            <span class="state-pill state-on">ACTIVE</span>
-          </div>
-
-          <!-- DHT11 Pin -->
-          <div class="actuator-item">
-            <div class="actuator-info">
-              <i class="fa-solid fa-temperature-half actuator-icon text-cyan"></i>
-              <div>
-                <strong>DHT11 Sensor</strong>
-                <p>Data &rarr; GPIO 12, VCC &rarr; 3.3V, GND &rarr; GND</p>
+                <strong>OLED 0.96" SSD1306</strong>
+                <p>I2C: SDA (GPIO 22), SCL (GPIO 23)</p>
               </div>
             </div>
             <span class="state-pill state-on">ACTIVE</span>
@@ -526,10 +526,34 @@
                 <td>Common system ground</td>
               </tr>
               <tr>
-                <td><strong>Visual Dashboard</strong></td>
-                <td>Web Interface</td>
-                <td><span class="pin-tag pin-i2c">Web IoT</span></td>
-                <td>Replaces physical OLED &amp; LEDs to save breadboard space; provides charts &amp; alerts</td>
+                <td><strong>Green LED</strong></td>
+                <td>Anode (+)</td>
+                <td><span class="pin-tag pin-out">GPIO 18</span></td>
+                <td>Connected through 220Ω / 330Ω resistor. Lights during Normal safe conditions</td>
+              </tr>
+              <tr>
+                <td><strong>Red LED</strong></td>
+                <td>Anode (+)</td>
+                <td><span class="pin-tag pin-out">GPIO 19</span></td>
+                <td>Connected through 220Ω / 330Ω resistor. Lights during Warning and flashes on Alert</td>
+              </tr>
+              <tr>
+                <td><strong>0.96" OLED Display</strong></td>
+                <td>SDA (Data)</td>
+                <td><span class="pin-tag pin-i2c">GPIO 22</span></td>
+                <td>I2C Data wire (SSD1306 128x64 display)</td>
+              </tr>
+              <tr>
+                <td><strong>0.96" OLED Display</strong></td>
+                <td>SCL (Clock)</td>
+                <td><span class="pin-tag pin-i2c">GPIO 23</span></td>
+                <td>I2C Clock wire (Custom assigned pins via <code>Wire.begin(22, 23)</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>0.96" OLED Display</strong></td>
+                <td>VCC &amp; GND</td>
+                <td><span class="pin-tag pin-pwr">3.3V &amp; GND</span></td>
+                <td>Standard I2C power rail</td>
               </tr>
             </tbody>
           </table>
@@ -538,10 +562,10 @@
         <div class="viva-quick-tips">
           <h4><i class="fa-solid fa-graduation-cap"></i> Teacher Viva Key Talking Points:</h4>
           <ul>
-            <li><strong>Why No Physical OLED/LEDs?</strong> To eliminate breadboard space limitations and wire clutter, all visual indicators (Green/Red alerts, graphs, PPM metrics) are consolidated into the IoT Web Dashboard, while the <strong>Active Buzzer (GPIO 21)</strong> handles physical acoustic alarms!</li>
             <li><strong>Why Voltage Divider on GPIO 34?</strong> The MQ-135 is powered by 5V, so its analog output can reach above 3.3V. ESP32 ADC pins can only safely accept maximum 3.3V (0-3.3V input range). Feeding 5V directly damages the ESP32 silicon!</li>
             <li><strong>Why GPIO 12 for DHT11?</strong> GPIO 12 is a bootstrap pin (MTDI). If held high at reset, flash voltage might switch to 1.8V instead of 3.3V. Our firmware and wiring ensure safe operation after power-on.</li>
-            <li><strong>3 Presentation Modules:</strong> Module 1: Sensing (MQ-135, DHT11) &bull; Module 2: Acquisition &amp; Processing (ESP32 ADC, Threshold logic) &bull; Module 3: Alert &amp; Visualization (Buzzer, IoT Web Dashboard).</li>
+            <li><strong>Why GPIO 22 &amp; 23 for OLED?</strong> Default ESP32 I2C pins are 21 and 22, but since GPIO 21 is assigned to the Buzzer, we route SCL to GPIO 23 and SDA to GPIO 22 using <code>Wire.begin(22, 23)</code>.</li>
+            <li><strong>3 Presentation Modules:</strong> Module 1: Sensing (MQ-135, DHT11) &bull; Module 2: Acquisition &amp; Processing (ESP32 ADC, Threshold logic) &bull; Module 3: Alert &amp; Visualization (OLED, LEDs, Buzzer, Web Dashboard).</li>
           </ul>
         </div>
       </div>

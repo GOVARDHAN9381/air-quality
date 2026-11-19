@@ -473,20 +473,34 @@ function renderTelemetry(data) {
 
   // 4. Actuators & Output State
   if (d.greenLed) {
-    if (el.ledGreenIndicator) el.ledGreenIndicator.className = 'indicator-led led-green';
+    if (el.ledGreenIndicator) el.ledGreenIndicator.classList.remove('off');
     if (el.greenLedState) {
       el.greenLedState.className = 'state-pill state-on';
-      el.greenLedState.style.background = '';
-      el.greenLedState.style.color = '';
-      el.greenLedState.textContent = 'NORMAL';
+      el.greenLedState.textContent = 'ON';
     }
   } else {
-    if (el.ledGreenIndicator) el.ledGreenIndicator.className = 'indicator-led led-red';
+    if (el.ledGreenIndicator) el.ledGreenIndicator.classList.add('off');
     if (el.greenLedState) {
-      el.greenLedState.className = 'state-pill state-on';
-      el.greenLedState.style.background = 'rgba(239, 68, 68, 0.25)';
-      el.greenLedState.style.color = '#f87171';
-      el.greenLedState.textContent = d.status === 'ALERT' ? 'CRITICAL' : 'WARNING';
+      el.greenLedState.className = 'state-pill state-off';
+      el.greenLedState.textContent = 'OFF';
+    }
+  }
+
+  if (d.redLed) {
+    if (el.ledRedIndicator) el.ledRedIndicator.classList.remove('off');
+    if (el.redLedState) {
+      el.redLedState.className = 'state-pill state-on';
+      el.redLedState.style.background = 'rgba(239, 68, 68, 0.25)';
+      el.redLedState.style.color = '#f87171';
+      el.redLedState.textContent = 'ON';
+    }
+  } else {
+    if (el.ledRedIndicator) el.ledRedIndicator.classList.add('off');
+    if (el.redLedState) {
+      el.redLedState.className = 'state-pill state-off';
+      el.redLedState.style.background = '';
+      el.redLedState.style.color = '';
+      el.redLedState.textContent = 'OFF';
     }
   }
 
