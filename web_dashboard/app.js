@@ -602,17 +602,27 @@ function generateDemoData() {
   });
 }
 
-// Fetch live telemetry from ESP32 REST Endpoint
+// Fetch live telemetry from REST Endpoint (Local ESP32 or Cloud Server)
 async function fetchEsp32Data() {
-  let targetUrl = el.espIpInput.value.trim() || state.endpoint;
-  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-    targetUrl = 'http://' + targetUrl;
+  const customIp = el.espIpInput.value.trim();
+  let apiEndpoint = '/api/data';
+
+  if (customIp) {
+    let target = customIp;
+    if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      target = 'http://' + target;
+    }
+    apiEndpoint = `${target}/api/data`;
+  } else if (window.location.protocol.startsWith('http')) {
+    // Hosted on Render / Cloud or local server: fetch from relative API
+    apiEndpoint = '/api/data';
+  } else {
+    apiEndpoint = `http://${state.endpoint}/api/data`;
   }
-  const apiEndpoint = `${targetUrl}/api/data`;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     const response = await fetch(apiEndpoint, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -621,18 +631,21 @@ async function fetchEsp32Data() {
     const json = await response.json();
 
     // Set connection status
-    setConnectionState(true, `Connected: ${targetUrl}`);
+    const label = customIp ? `Connected: ${customIp}` : (window.location.hostname || 'Cloud Server');
+    setConnectionState(true, `Connected: ${label}`);
 
-    // Parse incoming payload: { adc: 1240, temp: 26.5, hum: 55, green: 1, red: 0, buzz: 0 }
+    // Parse incoming payload: { adc: 2450, temp: 32.5, hum: 56, green: 1, red: 0, buzz: 0 }
     const gasProps = convertGas(json.adc, state.thresholds.voltageDividerRatio);
-    const indices = calculateIndices(json.temp, json.hum);
+    const tempVal = (json.temp !== undefined && json.temp !== null) ? Number(json.temp) : 0.0;
+    const humVal = (json.hum !== undefined && json.hum !== null) ? Number(json.hum) : 0.0;
+    const indices = calculateIndices(tempVal, humVal);
 
     renderTelemetry({
       gasAdc: json.adc,
       gasPpm: json.ppm || gasProps.ppm,
-      gasVolt: gasProps.measuredV,
-      tempC: json.temp,
-      humidity: json.hum,
+      gasVolt: json.voltage || gasProps.measuredV,
+      tempC: tempVal,
+      humidity: humVal,
       greenLed: Boolean(json.green),
       redLed: Boolean(json.red),
       buzzer: Boolean(json.buzz),
@@ -640,18 +653,19 @@ async function fetchEsp32Data() {
     });
 
   } catch (err) {
-    console.warn('ESP32 poll failed:', err.message);
-    
-    // Check if HTTPS Mixed Content blocked the local IP fetch
-    if (window.location.protocol === 'https:' && targetUrl.startsWith('http://')) {
-      setConnectionState(false, 'Blocked: Mixed Content (Open http://' + el.espIpInput.value.trim() + ' directly)');
-      console.error('HTTPS page cannot connect to local HTTP IP directly due to browser security. Open http://' + el.espIpInput.value.trim() + ' in a new browser tab!');
-    } else {
-      setConnectionState(false, 'Disconnected (Check IP & Same Wi-Fi)');
-    }
+    console.warn('Telemetry poll failed:', err.message);
 
-    // Automatically switch to demo data when ESP32 is offline so the screen is never blank!
-    generateDemoData();
+    // Only fallback to demo data if the user has demo mode turned on
+    if (state.isDemoMode) {
+      setConnectionState(false, 'Demo Mode (Simulated)');
+      generateDemoData();
+    } else {
+      if (customIp && window.location.protocol === 'https:' && customIp.startsWith('http://')) {
+        setConnectionState(false, 'Mixed Content Block: Open http://' + customIp + ' in a new tab');
+      } else {
+        setConnectionState(false, 'Waiting for ESP32 telemetry...');
+      }
+    }
   }
 }
 
@@ -864,6 +878,15 @@ window.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   startWarmupCountdown();
 
+  // If accessed over HTTP/HTTPS (e.g. Render cloud or local node server), default to Live mode
+  if (window.location.protocol.startsWith('http')) {
+    state.isDemoMode = false;
+    el.demoBtnText.textContent = 'Live Cloud';
+    el.btnToggleDemo.classList.add('btn-primary');
+    el.btnToggleDemo.classList.remove('btn-secondary');
+    setConnectionState(true, 'Connecting to Cloud...');
+  }
+
   // Auto-connect to Socket.io if running on Node.js / Cloud Server
   if (typeof io !== 'undefined') {
     try {
@@ -873,19 +896,22 @@ window.addEventListener('DOMContentLoaded', () => {
         el.demoBtnText.textContent = 'Live Cloud';
         el.btnToggleDemo.classList.add('btn-primary');
         el.btnToggleDemo.classList.remove('btn-secondary');
-        setConnectionState(true, 'Cloud WebSocket Connected');
+        setConnectionState(true, 'Cloud Live Connected');
+        fetchEsp32Data(); // Grab immediate snapshot
       });
 
       socket.on('telemetry_update', (d) => {
         state.isDemoMode = false;
         const gasProps = convertGas(d.adc, state.thresholds.voltageDividerRatio);
-        const indices = calculateIndices(d.temp, d.hum);
+        const tempVal = (d.temp !== undefined && d.temp !== null) ? Number(d.temp) : 0.0;
+        const humVal = (d.hum !== undefined && d.hum !== null) ? Number(d.hum) : 0.0;
+        const indices = calculateIndices(tempVal, humVal);
         renderTelemetry({
           gasAdc: d.adc,
           gasPpm: d.ppm || gasProps.ppm,
           gasVolt: d.voltage || gasProps.measuredV,
-          tempC: d.temp,
-          humidity: d.hum,
+          tempC: tempVal,
+          humidity: humVal,
           greenLed: Boolean(d.green),
           redLed: Boolean(d.red),
           buzzer: Boolean(d.buzz),

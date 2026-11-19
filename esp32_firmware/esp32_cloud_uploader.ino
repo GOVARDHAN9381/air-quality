@@ -15,6 +15,7 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -39,8 +40,8 @@
 const char* wifi_ssid     = "YOUR_WIFI_NAME";     // <-- Enter your Wi-Fi SSID
 const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Enter your Wi-Fi Password
 
-// Cloud / Local Server Endpoint (Render or Local Node/Python server)
-const char* cloudServerUrl = "https://your-render-app.onrender.com/api/telemetry";
+// Cloud / Local Server Endpoint (Render Cloud Server)
+const char* cloudServerUrl = "https://air-quality-monitoring-75du.onrender.com/api/telemetry";
 
 // Thresholds (Calibrated for your room's clean air baseline: ~2400)
 int thresholdWarning = 2700;   // Warning Level -> Red LED ON, Web Warning
@@ -90,8 +91,14 @@ void sendTelemetryToCloud() {
     return;
   }
 
+  WiFiClientSecure client;
+  client.setInsecure(); // Disable SSL cert check for Render HTTPS
   HTTPClient http;
-  http.begin(cloudServerUrl);
+
+  if (!http.begin(client, cloudServerUrl)) {
+    Serial.println("[Cloud] Connection failed to initialize");
+    return;
+  }
   http.addHeader("Content-Type", "application/json");
 
   // Construct JSON payload

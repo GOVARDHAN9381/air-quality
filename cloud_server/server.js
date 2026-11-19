@@ -29,17 +29,17 @@ app.use(express.static(publicDir));
 
 // In-memory state & history buffer
 let currentTelemetry = {
-  adc: 1150,
-  ppm: 410,
-  voltage: 0.93,
-  temp: 26.5,
+  adc: 2400,
+  ppm: 420,
+  voltage: 1.93,
+  temp: 28.5,
   hum: 55,
   status: 'NORMAL',
   green: 1,
   red: 0,
   buzz: 0,
-  warnThresh: 1200,
-  alertThresh: 2000,
+  warnThresh: 2700,
+  alertThresh: 3200,
   updatedAt: new Date().toISOString()
 };
 

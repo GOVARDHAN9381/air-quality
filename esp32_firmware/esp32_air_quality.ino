@@ -23,6 +23,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -53,9 +54,8 @@ int thresholdAlert   = 3200;   // Critical gas / smoke -> Red LED Flashing + Buz
 const char* wifi_ssid     = "YOUR_WIFI_NAME";     // <-- Change to your Wi-Fi name
 const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Change to your Wi-Fi password
 
-// 2. Cloud Website URL (Paste your Render link here with /api/telemetry)
-// Example: "https://your-app.onrender.com/api/telemetry"
-const char* cloudServerUrl = "";
+// 2. Cloud Website URL (Render Cloud Server Endpoint)
+const char* cloudServerUrl = "https://air-quality-monitoring-75du.onrender.com/api/telemetry";
 
 // 3. SoftAP Fallback (ESP32 creates its own hotspot for college presentations)
 const char* ap_ssid       = "AirSense-ESP32-Hotspot";
@@ -110,8 +110,14 @@ int calculateEstimatedPpm(int adc) {
 void sendTelemetryToCloud() {
   if (strlen(cloudServerUrl) == 0 || WiFi.status() != WL_CONNECTED) return;
 
+  WiFiClientSecure client;
+  client.setInsecure(); // Disable SSL certificate validation for Render HTTPS
   HTTPClient http;
-  http.begin(cloudServerUrl);
+
+  if (!http.begin(client, cloudServerUrl)) {
+    Serial.println("[Cloud] Connection failed to initialize");
+    return;
+  }
   http.addHeader("Content-Type", "application/json");
 
   String jsonPayload = "{";
@@ -128,9 +134,9 @@ void sendTelemetryToCloud() {
 
   int httpCode = http.POST(jsonPayload);
   if (httpCode > 0) {
-    Serial.printf("[Website Upload OK: Code %d]\n", httpCode);
+    Serial.printf("[Cloud Upload OK: Code %d]\n", httpCode);
   } else {
-    Serial.printf("[Website Upload Failed: %s]\n", http.errorToString(httpCode).c_str());
+    Serial.printf("[Cloud Upload Failed: %s]\n", http.errorToString(httpCode).c_str());
   }
   http.end();
 }
