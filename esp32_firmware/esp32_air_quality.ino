@@ -1,67 +1,47 @@
 /*
  * =========================================================================================
- * Project: ESP32-Based Real-Time Indoor Air Quality Monitoring & Intelligent Warning System
+ * Project: ESP32 Standalone Web Server - Real-Time Air Quality Monitoring System
  * Course: Microprocessors & Microcontrollers (MPMC T-3)
  * Target Hardware: ESP32 DevKit V1 (30-pin)
  * 
- * Hardware Connections:
- *   - MQ-135 Gas Sensor:   A0 -> GPIO 34 (via Resistor Voltage Divider: 10k/20k to keep <= 3.3V)
- *                          VCC -> 5V (Heater coil requirement), GND -> GND
- *   - DHT11 Sensor:        Data (D) -> GPIO 12, VCC -> 3.3V, GND -> GND
- *   - 0.96" I2C OLED:      SDA -> GPIO 22, SCL -> GPIO 23, VCC -> 3.3V, GND -> GND
- *   - Green LED (Normal):  Anode -> GPIO 18 (via 220-330 ohm resistor), Cathode -> GND
- *   - Red LED (Warning):   Anode -> GPIO 19 (via 220-330 ohm resistor), Cathode -> GND
- *   - Active Buzzer:       Positive (+) -> GPIO 21, Negative (-) -> GND
+ * Hardware Connections (Streamlined Breadboard Setup - No OLED/LEDs):
+ *   - DHT11 Sensor:      GND -> GND, VCC -> 3.3V, DATA -> GPIO 12
+ *   - MQ-135 Gas Sensor: GND -> GND, VCC -> 5V,   A0 -> GPIO 34 (via voltage divider)
+ *   - Active Buzzer:     Negative (-) -> GND,     Positive (+) -> GPIO 21
  * 
- * Required Arduino Libraries (Install via Arduino Library Manager):
- *   1. "DHT sensor library" by Adafruit (and "Adafruit Unified Sensor")
- *   2. "Adafruit SSD1306" by Adafruit
- *   3. "Adafruit GFX Library" by Adafruit
- *   4. Built-in: <WiFi.h>, <WebServer.h>, <Wire.h>
+ * Note: OLED display and physical LEDs are omitted due to breadboard space limits.
+ * The ESP32 hosts its own Wi-Fi Web Dashboard which displays live gauges,
+ * PPM readings, temperature, humidity, and visual warning banners!
  * =========================================================================================
  */
 
 #include <WiFi.h>
 #include <WebServer.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include <DHT.h>
 
 // ================= PINS CONFIGURATION =================
-#define PIN_MQ135         34  // Analog Input ADC1_CH6 (Input-only pin on ESP32)
+#define PIN_MQ135         34  // Analog Input ADC1_CH6 (via voltage divider)
 #define PIN_DHT           12  // Digital 1-wire pin for DHT11
 #define PIN_BUZZER        21  // Active Buzzer Positive
-#define PIN_LED_GREEN     18  // Normal Condition Indicator
-#define PIN_LED_RED       19  // Warning / Alert Indicator
-#define PIN_OLED_SDA      22  // Custom I2C SDA wire
-#define PIN_OLED_SCL      23  // Custom I2C SCL wire
 
 #define DHTTYPE           DHT11
-#define SCREEN_WIDTH      128
-#define SCREEN_HEIGHT     64
-#define OLED_RESET        -1
-#define SCREEN_I2C_ADDR   0x3C // Default SSD1306 I2C address
 
 // ================= THRESHOLD DEFAULTS =================
-// Note: ESP32 ADC is 12-bit (0 - 4095).
-// In normal clean indoor air, ADC is typically 800 - 1200 (with 10k/20k divider).
-int thresholdWarning = 1300;   // Moderate gas level -> Red LED ON
-int thresholdAlert   = 2100;   // Severe gas / smoke -> Red LED + Buzzer Sounding
+int thresholdWarning = 1300;   // Moderate gas level -> Web Warning State
+int thresholdAlert   = 2100;   // Critical gas / smoke -> Web Alert + Buzzer Siren
 
 // ================= NETWORK CREDENTIALS =================
 // 1. Station Mode (Connects to existing router or mobile hotspot)
 const char* wifi_ssid     = "YOUR_WIFI_NAME";     // <-- Change to your Wi-Fi name
 const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Change to your Wi-Fi password
 
-// 2. SoftAP Fallback (ESP32 creates its own hotspot if router not available)
+// 2. SoftAP Fallback (ESP32 creates its own hotspot for college presentations)
 const char* ap_ssid       = "AirSense-ESP32-Hotspot";
 const char* ap_password   = "12345678";
 
 // ================= OBJECTS & GLOBALS =================
 WebServer server(80);
 DHT dht(PIN_DHT, DHTTYPE);
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Sensor readings
 int rawAdc = 0;
@@ -70,11 +50,6 @@ int estimatedPpm = 400;
 float temperatureC = 0.0;
 float humidityPct = 0.0;
 String systemStatus = "NORMAL"; // NORMAL | WARNING | ALERT
-
-// Actuator states
-bool stateGreenLed = true;
-bool stateRedLed = false;
-bool stateBuzzer = false;
 
 // Non-blocking timer tracking
 unsigned long lastSensorReadTime = 0;
@@ -95,7 +70,6 @@ int readMQ135Filtered() {
 
 // Approximate PPM equation for display
 int calculateEstimatedPpm(int adc) {
-  // Approximate curve: baseline 400 ppm (ambient fresh air)
   if (adc < 600) return 400;
   float ratio = (float)adc / 600.0;
   int ppm = 400 + (int)(pow(ratio, 2.5) * 85.0);
@@ -104,101 +78,22 @@ int calculateEstimatedPpm(int adc) {
 }
 
 // ================= HARDWARE UPDATE LOGIC =================
-void updateActuatorsAndStatus() {
+void updateBuzzerAndStatus() {
   if (rawAdc >= thresholdAlert) {
     systemStatus = "ALERT";
-    stateGreenLed = false;
-    stateRedLed = true;
-    stateBuzzer = true;
-  } else if (rawAdc >= thresholdWarning) {
-    systemStatus = "WARNING";
-    stateGreenLed = false;
-    stateRedLed = true;
-    stateBuzzer = false;
-  } else {
-    systemStatus = "NORMAL";
-    stateGreenLed = true;
-    stateRedLed = false;
-    stateBuzzer = false;
-  }
-
-  // Update Green LED
-  digitalWrite(PIN_LED_GREEN, stateGreenLed ? HIGH : LOW);
-
-  // Red LED & Buzzer handling
-  if (systemStatus == "ALERT") {
-    // Intermittent pulsing beep during critical alert
+    // Intermittent alarm pulsing
     if (millis() - buzzerBlinkTime > 300) {
       buzzerBlinkTime = millis();
       buzzerToggle = !buzzerToggle;
-      digitalWrite(PIN_LED_RED, buzzerToggle ? HIGH : LOW);
       digitalWrite(PIN_BUZZER, buzzerToggle ? HIGH : LOW);
     }
-  } else if (systemStatus == "WARNING") {
-    digitalWrite(PIN_LED_RED, HIGH);
+  } else if (rawAdc >= thresholdWarning) {
+    systemStatus = "WARNING";
     digitalWrite(PIN_BUZZER, LOW);
   } else {
-    digitalWrite(PIN_LED_RED, LOW);
+    systemStatus = "NORMAL";
     digitalWrite(PIN_BUZZER, LOW);
   }
-}
-
-// ================= OLED DISPLAY UPDATE =================
-void updateOLED() {
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-
-  // Line 1: Header / Title
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.print("AIR MONITOR ");
-  display.print("[");
-  display.print(systemStatus);
-  display.print("]");
-
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-
-  // Line 2: Air Quality Metric
-  display.setCursor(0, 14);
-  display.print("Air ADC: ");
-  display.setTextSize(1);
-  display.print(rawAdc);
-  display.print(" (");
-  display.print(estimatedPpm);
-  display.print("ppm)");
-
-  // Line 3: Temperature & Humidity
-  display.setCursor(0, 27);
-  display.print("Temp: ");
-  if (isnan(temperatureC)) {
-    display.print("-- C");
-  } else {
-    display.print(temperatureC, 1);
-    display.print((char)247); // Degree symbol
-    display.print("C");
-  }
-
-  display.setCursor(0, 40);
-  display.print("Humidity: ");
-  if (isnan(humidityPct)) {
-    display.print("-- %");
-  } else {
-    display.print(humidityPct, 1);
-    display.print(" %");
-  }
-
-  // Line 4: System IP address (So you know what to type in browser!)
-  display.drawLine(0, 52, 127, 52, SSD1306_WHITE);
-  display.setCursor(0, 55);
-  display.setTextSize(1);
-  if (WiFi.status() == WL_CONNECTED) {
-    display.print("IP: ");
-    display.print(WiFi.localIP().toString());
-  } else {
-    display.print("AP: 192.168.4.1");
-  }
-
-  display.display();
 }
 
 // ================= WEB SERVER API HANDLERS =================
@@ -214,9 +109,9 @@ void handleApiData() {
   json += "\"status\":\"" + systemStatus + "\",";
   json += "\"warnThresh\":" + String(thresholdWarning) + ",";
   json += "\"alertThresh\":" + String(thresholdAlert) + ",";
-  json += "\"green\":" + String(stateGreenLed ? 1 : 0) + ",";
-  json += "\"red\":" + String(stateRedLed ? 1 : 0) + ",";
-  json += "\"buzz\":" + String(stateBuzzer ? 1 : 0) + ",";
+  json += "\"green\":" + String(systemStatus == "NORMAL" ? 1 : 0) + ",";
+  json += "\"red\":" + String(systemStatus != "NORMAL" ? 1 : 0) + ",";
+  json += "\"buzz\":" + String(systemStatus == "ALERT" ? 1 : 0) + ",";
   json += "\"uptime\":" + String(millis() / 1000) + ",";
   json += "\"ip\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString()) + "\"";
   json += "}";
@@ -245,32 +140,32 @@ void handleRoot() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 Air Quality Monitor</title>
+  <title>AirSense ESP32 Live Monitor</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #0b0f19; color: #f3f4f6; margin: 0; padding: 1.5rem; text-align: center; }
-    .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; max-width: 480px; margin: auto; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-    h2 { margin-top: 0; color: #6366f1; }
-    .val-box { font-size: 2.8rem; font-weight: 800; font-family: monospace; color: #10b981; margin: 0.5rem 0; }
-    .status-badge { display: inline-block; padding: 0.35rem 0.9rem; border-radius: 99px; font-weight: bold; font-size: 0.9rem; margin-bottom: 1rem; }
-    .status-NORMAL { background: rgba(16,185,129,0.2); color: #34d399; }
-    .status-WARNING { background: rgba(245,158,11,0.2); color: #fbbf24; }
-    .status-ALERT { background: rgba(239,68,68,0.25); color: #f87171; animation: blink 1s infinite; }
-    .metrics { display: flex; justify-content: space-around; margin: 1rem 0; background: #1f2937; padding: 1rem; border-radius: 10px; }
-    .m-item strong { display: block; font-size: 1.3rem; }
-    .leds { display: flex; justify-content: space-around; margin-top: 1rem; font-size: 0.85rem; }
-    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-    .dot-grn { background: #10b981; box-shadow: 0 0 8px #10b981; }
-    .dot-red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
-    .dot-off { background: #4b5563; }
-    @keyframes blink { 50% { opacity: 0.4; } }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0a0e17; color: #f9fafb; margin: 0; padding: 1.5rem; text-align: center; }
+    .card { background: #111827; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; max-width: 480px; margin: auto; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.6); }
+    h2 { margin-top: 0; color: #6366f1; font-size: 1.4rem; }
+    .status-badge { display: inline-block; padding: 0.4rem 1rem; border-radius: 99px; font-weight: 700; font-size: 0.9rem; margin: 0.5rem 0 1rem 0; letter-spacing: 0.05em; }
+    .status-NORMAL { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
+    .status-WARNING { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+    .status-ALERT { background: rgba(239,68,68,0.25); color: #f87171; border: 1px solid rgba(239,68,68,0.5); animation: blink 0.8s infinite; }
+    .val-box { font-size: 3rem; font-weight: 800; font-family: monospace; color: #10b981; margin: 0.2rem 0; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin: 1.2rem 0; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 12px; }
+    .m-item span { font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; }
+    .m-item strong { display: block; font-size: 1.3rem; margin-top: 0.2rem; font-family: monospace; }
+    .hardware-info { font-size: 0.78rem; color: #9ca3af; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem; text-align: left; }
+    .hw-row { display: flex; justify-content: space-between; margin-bottom: 0.35rem; }
+    .tag { font-family: monospace; color: #a5b4fc; }
+    @keyframes blink { 50% { opacity: 0.3; } }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>AirSense ESP32 Live</h2>
-    <div id="statusBadge" class="status-badge status-NORMAL">NORMAL CONDITION</div>
+    <h2>AirSense ESP32 Live Hub</h2>
+    <div id="statusBadge" class="status-badge status-NORMAL">AIR QUALITY: NORMAL</div>
+    
     <div class="val-box" id="gasAdc">---</div>
-    <div style="color: #9ca3af; font-size: 0.9rem;">MQ-135 ADC Value (0-4095)</div>
+    <div style="color: #9ca3af; font-size: 0.85rem;">MQ-135 ADC (GPIO 34) &bull; <span id="gasVolt">0.00</span> V</div>
 
     <div class="metrics">
       <div class="m-item">
@@ -287,10 +182,11 @@ void handleRoot() {
       </div>
     </div>
 
-    <div class="leds">
-      <div><span class="dot dot-grn" id="grnDot"></span>Green LED: <span id="grnTxt">ON</span></div>
-      <div><span class="dot dot-off" id="redDot"></span>Red LED: <span id="redTxt">OFF</span></div>
-      <div>Buzzer: <span id="buzzTxt">OFF</span></div>
+    <div class="hardware-info">
+      <div class="hw-row"><span>MQ-135 Gas Sensor:</span> <span class="tag">GPIO 34 (Analog In)</span></div>
+      <div class="hw-row"><span>DHT11 Temp/Hum:</span> <span class="tag">GPIO 12 (1-Wire)</span></div>
+      <div class="hw-row"><span>Buzzer Siren:</span> <span class="tag" id="buzzStatus">GPIO 21 (SILENT)</span></div>
+      <div class="hw-row"><span>Visual Dashboard:</span> <span class="tag" style="color:#34d399;">Web Active (Replaces OLED)</span></div>
     </div>
   </div>
 
@@ -300,21 +196,23 @@ void handleRoot() {
         const res = await fetch('/api/data');
         const d = await res.json();
         document.getElementById('gasAdc').textContent = d.adc;
+        document.getElementById('gasVolt').textContent = d.voltage;
         document.getElementById('temp').innerHTML = d.temp + ' &deg;C';
         document.getElementById('hum').textContent = d.hum + ' %';
         document.getElementById('ppm').textContent = d.ppm;
 
         const badge = document.getElementById('statusBadge');
         badge.className = 'status-badge status-' + d.status;
-        badge.textContent = d.status + ' CONDITION';
+        badge.textContent = 'AIR QUALITY: ' + d.status;
 
-        document.getElementById('grnDot').className = d.green ? 'dot dot-grn' : 'dot dot-off';
-        document.getElementById('grnTxt').textContent = d.green ? 'ON' : 'OFF';
-
-        document.getElementById('redDot').className = d.red ? 'dot dot-red' : 'dot dot-off';
-        document.getElementById('redTxt').textContent = d.red ? 'ON' : 'OFF';
-
-        document.getElementById('buzzTxt').textContent = d.buzz ? 'SOUNDING' : 'OFF';
+        const buzz = document.getElementById('buzzStatus');
+        if (d.buzz) {
+          buzz.textContent = 'GPIO 21 (SOUNDING ALARM!)';
+          buzz.style.color = '#ef4444';
+        } else {
+          buzz.textContent = 'GPIO 21 (SILENT)';
+          buzz.style.color = '#a5b4fc';
+        }
       } catch (e) {
         console.warn('Poll failed');
       }
@@ -335,33 +233,9 @@ void setup() {
   delay(500);
   Serial.println("\n--- ESP32 Air Quality Monitoring System Starting ---");
 
-  // Configure Actuator Pins
-  pinMode(PIN_LED_GREEN, OUTPUT);
-  pinMode(PIN_LED_RED, OUTPUT);
+  // Configure Buzzer Pin
   pinMode(PIN_BUZZER, OUTPUT);
-
-  // Initial Safe State
-  digitalWrite(PIN_LED_GREEN, HIGH);
-  digitalWrite(PIN_LED_RED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
-
-  // Initialize Custom I2C (SDA = GPIO 22, SCL = GPIO 23)
-  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
-
-  // Initialize OLED
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR)) {
-    Serial.println("SSD1306 allocation failed. Check GPIO 22 & 23 wiring.");
-  } else {
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(10, 20);
-    display.println("AirSense ESP32");
-    display.setCursor(10, 35);
-    display.println("Initializing...");
-    display.display();
-    delay(1000);
-  }
 
   // Initialize DHT11
   dht.begin();
@@ -432,21 +306,10 @@ void loop() {
     }
 
     // Print to Serial Monitor for debugging
-    Serial.print("ADC: ");
-    Serial.print(rawAdc);
-    Serial.print(" | Volt: ");
-    Serial.print(voltage);
-    Serial.print("V | Temp: ");
-    Serial.print(temperatureC);
-    Serial.print("C | Hum: ");
-    Serial.print(humidityPct);
-    Serial.print("% | Status: ");
-    Serial.println(systemStatus);
-
-    // Update OLED Display
-    updateOLED();
+    Serial.printf("ADC: %d | Volt: %.2fV | Temp: %.1fC | Hum: %.1f%% | Status: %s\n",
+                  rawAdc, voltage, temperatureC, humidityPct, systemStatus.c_str());
   }
 
-  // 3. Update Hardware Actuators (LEDs and Buzzer)
-  updateActuatorsAndStatus();
+  // 3. Update Buzzer Actuator
+  updateBuzzerAndStatus();
 }

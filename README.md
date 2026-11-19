@@ -5,16 +5,34 @@ An end-to-end IoT embedded solution for real-time indoor air quality monitoring,
 
 ---
 
-## 📁 Repository & Workspace Directory Structure
+## 🔌 Updated Hardware Pinout (Streamlined Setup)
+
+*Optimized for breadboard space: physical OLED and LEDs are replaced by the Web Visualization Dashboard, eliminating loose wiring.*
+
+| Component | Pin | ESP32 Pin | Purpose & Description |
+| :--- | :--- | :--- | :--- |
+| **DHT11** | **G (Ground)** | **GND** | Common system ground |
+| **DHT11** | **V (Power)** | **3.3V** | Regulated 3.3V power rail |
+| **DHT11** | **D (Data)** | **GPIO 12** | Single-wire digital temperature & humidity reading |
+| **MQ-135** | **A0 (Analog)** | **GPIO 34** | Analog gas input (via 10kΩ/20kΩ voltage divider to stay &le; 3.3V) |
+| **MQ-135** | **G (Ground)** | **GND** | Common system ground |
+| **MQ-135** | **V (Power)** | **5V (VIN)** | Heater coil requires 5V to maintain 200°C operational temp |
+| **Active Buzzer** | **P (Positive +)** | **GPIO 21** | Audible siren during critical gas concentration |
+| **Active Buzzer** | **Negative (-)** | **GND** | Common system ground |
+| **Visual Dashboard**| **Web App** | **Web / Wi-Fi** | Replaces physical OLED & LEDs; displays live graphs, gauges & alerts |
+
+---
+
+## 📁 Repository Directory Structure
 
 ```
 c:\airquality\
 ├── esp32_firmware/
-│   ├── esp32_air_quality.ino        # Full Standalone Firmware (OLED, Sensors, LEDs, Buzzer + On-board Web Server)
-│   └── esp32_cloud_uploader.ino     # Cloud Uploader Firmware (Pushes JSON telemetry to Web/Cloud)
+│   ├── esp32_air_quality.ino        # Standalone Firmware (Sensors, Buzzer + On-board Web Server)
+│   └── esp32_cloud_uploader.ino     # Cloud Uploader Firmware (Pushes JSON telemetry to Render/Web)
 │
 ├── web_dashboard/                   # Responsive Real-Time Web Application
-│   ├── index.html                   # Dark-themed glassmorphism UI with live gauges & warning banners
+│   ├── index.html                   # Dark-themed UI with live gauges, warm-up timer & warning banners
 │   ├── style.css                    # Modern CSS3 styling (Mobile, Tablet & Projector optimized)
 │   └── app.js                       # Real-time Chart.js graphs, Web Audio alarm, Demo simulator, CSV export
 │
@@ -52,19 +70,3 @@ c:\airquality\
 1. Deploy the `cloud_server` folder to [Render.com](https://render.com) for free.
 2. Flash [`esp32_firmware/esp32_cloud_uploader.ino`](file:///c:/airquality/esp32_firmware/esp32_cloud_uploader.ino) with your Render URL.
 3. Anyone in the world can open your public website URL and view your live air quality readings!
-
----
-
-## 🔌 Hardware Pinout Summary
-
-| Component | Pin | ESP32 Pin | Purpose |
-| :--- | :--- | :--- | :--- |
-| **MQ-135** | A0 | **GPIO 34** | Analog gas input (via 10kΩ/20kΩ voltage divider to stay &le; 3.3V) |
-| **MQ-135** | VCC & GND | **5V & GND** | Heater coil requires 5V to maintain 200°C operational temp |
-| **DHT11** | Data (D) | **GPIO 12** | Single-bus digital temperature and humidity reading |
-| **DHT11** | VCC & GND | **3.3V & GND** | Standard 3.3V power |
-| **OLED (SSD1306)** | SDA | **GPIO 22** | Custom I2C Data wire |
-| **OLED (SSD1306)** | SCL | **GPIO 23** | Custom I2C Clock wire |
-| **Green LED** | Anode (+) | **GPIO 18** | Normal Safe Status indicator (via 220Ω resistor) |
-| **Red LED** | Anode (+) | **GPIO 19** | Warning / Alert Status indicator (via 220Ω resistor) |
-| **Active Buzzer** | Positive (+) | **GPIO 21** | Audible siren during critical gas concentration |
