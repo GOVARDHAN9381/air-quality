@@ -435,24 +435,29 @@ void setup() {
 
   // Initialize Wi-Fi: Station Mode + SoftAP Dual Mode
   WiFi.mode(WIFI_AP_STA);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(wifi_ssid, wifi_password);
-  Serial.print("Connecting to Wi-Fi SSID: ");
+  Serial.print("Connecting to Hotspot/Wi-Fi SSID: ");
   Serial.println(wifi_ssid);
 
-  // Wait up to 6 seconds for router connection
+  // Wait up to 20 seconds for mobile hotspot DHCP handshake
   int wifiAttempts = 0;
-  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 12) {
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 40) {
     delay(500);
     Serial.print(".");
     wifiAttempts++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWi-Fi Connected successfully!");
+    Serial.println("\n[SUCCESS] Hotspot Connected!");
     Serial.print("Station IP Address: ");
     Serial.println(WiFi.localIP());
+    Serial.println("Streaming real-time telemetry to Render website...");
   } else {
-    Serial.println("\nRouter Wi-Fi not available. Running in Standalone Hotspot mode.");
+    Serial.println("\n[NOTICE] Hotspot did not connect within 20 seconds.");
+    Serial.printf("Status Code: %d (3 = Connected, 4 = Failed, 6 = Disconnected)\n", WiFi.status());
+    Serial.println("Tip: Check that phone hotspot is on 2.4 GHz band (not 5 GHz).");
+    Serial.println("SoftAP fallback is running for local presentation.");
   }
 
   // Start SoftAP Hotspot as guaranteed fallback for viva/demo
