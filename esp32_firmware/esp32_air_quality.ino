@@ -22,6 +22,7 @@
 
 #include <WiFi.h>
 #include <WebServer.h>
+#include <HTTPClient.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -52,7 +53,11 @@ int thresholdAlert   = 3200;   // Critical gas / smoke -> Red LED Flashing + Buz
 const char* wifi_ssid     = "YOUR_WIFI_NAME";     // <-- Change to your Wi-Fi name
 const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Change to your Wi-Fi password
 
-// 2. SoftAP Fallback (ESP32 creates its own hotspot for college presentations)
+// 2. Cloud Website URL (Paste your Render link here with /api/telemetry)
+// Example: "https://your-app.onrender.com/api/telemetry"
+const char* cloudServerUrl = "";
+
+// 3. SoftAP Fallback (ESP32 creates its own hotspot for college presentations)
 const char* ap_ssid       = "AirSense-ESP32-Hotspot";
 const char* ap_password   = "12345678";
 
@@ -99,6 +104,35 @@ int calculateEstimatedPpm(int adc) {
   int ppm = 400 + (int)(pow(ratio, 2.5) * 85.0);
   if (ppm > 9999) ppm = 9999;
   return ppm;
+}
+
+// Push JSON telemetry to Render / Cloud Website (if URL is set)
+void sendTelemetryToCloud() {
+  if (strlen(cloudServerUrl) == 0 || WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  http.begin(cloudServerUrl);
+  http.addHeader("Content-Type", "application/json");
+
+  String jsonPayload = "{";
+  jsonPayload += "\"adc\":" + String(rawAdc) + ",";
+  jsonPayload += "\"ppm\":" + String(estimatedPpm) + ",";
+  jsonPayload += "\"voltage\":" + String(voltage, 2) + ",";
+  jsonPayload += "\"temp\":" + String(isnan(temperatureC) ? 0.0 : temperatureC, 1) + ",";
+  jsonPayload += "\"hum\":" + String(isnan(humidityPct) ? 0.0 : humidityPct, 1) + ",";
+  jsonPayload += "\"status\":\"" + systemStatus + "\",";
+  jsonPayload += "\"green\":" + String(stateGreenLed ? 1 : 0) + ",";
+  jsonPayload += "\"red\":" + String(stateRedLed ? 1 : 0) + ",";
+  jsonPayload += "\"buzz\":" + String(stateBuzzer ? 1 : 0);
+  jsonPayload += "}";
+
+  int httpCode = http.POST(jsonPayload);
+  if (httpCode > 0) {
+    Serial.printf("[Website Upload OK: Code %d]\n", httpCode);
+  } else {
+    Serial.printf("[Website Upload Failed: %s]\n", http.errorToString(httpCode).c_str());
+  }
+  http.end();
 }
 
 // ================= HARDWARE UPDATE LOGIC =================
@@ -467,6 +501,9 @@ void loop() {
 
     // Update OLED Display
     updateOLED();
+
+    // Push to Cloud Website (if configured)
+    sendTelemetryToCloud();
   }
 
   // 3. Update Actuators (LEDs and Buzzer)
