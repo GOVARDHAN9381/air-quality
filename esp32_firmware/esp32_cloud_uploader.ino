@@ -42,9 +42,9 @@ const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Enter your Wi-Fi Passwo
 // Cloud / Local Server Endpoint (Render or Local Node/Python server)
 const char* cloudServerUrl = "https://your-render-app.onrender.com/api/telemetry";
 
-// Thresholds
-int thresholdWarning = 1300;   // Warning Level -> Red LED ON, Web Warning
-int thresholdAlert   = 2100;   // Critical Level -> Red LED Flashing + Buzzer Siren
+// Thresholds (Calibrated for your room's clean air baseline: ~2400)
+int thresholdWarning = 2700;   // Warning Level -> Red LED ON, Web Warning
+int thresholdAlert   = 3200;   // Critical Level -> Red LED Flashing + Buzzer Siren
 
 // Hardware Objects
 DHT dht(PIN_DHT, DHTTYPE);

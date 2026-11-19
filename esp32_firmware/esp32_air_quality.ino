@@ -43,8 +43,9 @@
 #define SCREEN_I2C_ADDR   0x3C // Default SSD1306 address
 
 // ================= THRESHOLD DEFAULTS =================
-int thresholdWarning = 1300;   // Moderate gas level -> Red LED ON, Web Warning
-int thresholdAlert   = 2100;   // Critical gas / smoke -> Red LED Flashing + Buzzer Siren
+// Calibrated for your room's clean air baseline (current baseline: ~2300-2500)
+int thresholdWarning = 2700;   // Moderate gas level -> Red LED ON, Web Warning
+int thresholdAlert   = 3200;   // Critical gas / smoke -> Red LED Flashing + Buzzer Siren
 
 // ================= NETWORK CREDENTIALS =================
 // 1. Station Mode (Connects to existing router or mobile hotspot)
@@ -454,11 +455,15 @@ void loop() {
     if (!isnan(h) && !isnan(t)) {
       humidityPct = h;
       temperatureC = t;
+    } else {
+      humidityPct = 0.0;
+      temperatureC = 0.0;
     }
 
     // Print to Serial Monitor for debugging
-    Serial.printf("ADC: %d | Volt: %.2fV | Temp: %.1fC | Hum: %.1f%% | Status: %s\n",
-                  rawAdc, voltage, temperatureC, humidityPct, systemStatus.c_str());
+    String activeIp = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "192.168.4.1 (Hotspot)";
+    Serial.printf("ADC: %d | Volt: %.2fV | Temp: %.1fC | Hum: %.1f%% | Status: %s | Web IP: %s\n",
+                  rawAdc, voltage, temperatureC, humidityPct, systemStatus.c_str(), activeIp.c_str());
 
     // Update OLED Display
     updateOLED();
