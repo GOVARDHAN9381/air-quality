@@ -641,7 +641,15 @@ async function fetchEsp32Data() {
 
   } catch (err) {
     console.warn('ESP32 poll failed:', err.message);
-    setConnectionState(false, 'Disconnected (Fallback to Demo)');
+    
+    // Check if HTTPS Mixed Content blocked the local IP fetch
+    if (window.location.protocol === 'https:' && targetUrl.startsWith('http://')) {
+      setConnectionState(false, 'Blocked: Mixed Content (Open http://' + el.espIpInput.value.trim() + ' directly)');
+      console.error('HTTPS page cannot connect to local HTTP IP directly due to browser security. Open http://' + el.espIpInput.value.trim() + ' in a new browser tab!');
+    } else {
+      setConnectionState(false, 'Disconnected (Check IP & Same Wi-Fi)');
+    }
+
     // Automatically switch to demo data when ESP32 is offline so the screen is never blank!
     generateDemoData();
   }

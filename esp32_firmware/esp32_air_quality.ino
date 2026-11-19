@@ -218,7 +218,17 @@ void handleApiData() {
   json += "}";
 
   server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "*");
   server.send(200, "application/json", json);
+}
+
+// Handler: Preflight OPTIONS request for browser CORS
+void handleOptions() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  server.send(204);
 }
 
 // Handler 2: /api/thresholds (Allows dynamic threshold adjustment from web UI)
@@ -414,7 +424,10 @@ void setup() {
   // Set up Web Server routes
   server.on("/", HTTP_GET, handleRoot);
   server.on("/api/data", HTTP_GET, handleApiData);
+  server.on("/api/data", HTTP_OPTIONS, handleOptions);
   server.on("/api/thresholds", HTTP_POST, handleApiThresholds);
+  server.on("/api/thresholds", HTTP_OPTIONS, handleOptions);
+  server.enableCORS(true);
 
   server.begin();
   Serial.println("HTTP Web Server Started on Port 80.");
