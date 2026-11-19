@@ -1,0 +1,18 @@
+{
+  "name": "esp32-air-quality-hub",
+  "version": "1.0.0",
+  "description": "ESP32 Real-Time Indoor Air Quality Monitoring System - Cloud Hub",
+  "main": "cloud_server/server.js",
+  "scripts": {
+    "build": "npm install --prefix cloud_server",
+    "start": "node cloud_server/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

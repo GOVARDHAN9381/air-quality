@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: esp32-air-quality-hub
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --prefix cloud_server
+    startCommand: node cloud_server/server.js
+    envVars:
+      - key: PORT
+        value: 10000

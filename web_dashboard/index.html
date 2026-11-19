@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Indoor Air Quality & Environmental Sensing Hub</title>
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Optional Socket.io client (auto-active when hosted on cloud_server) -->
+  <script src="/socket.io/socket.io.js" onerror="console.info('Standalone mode (Socket.io optional)')"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon">
+        <i class="fa-solid fa-wind"></i>
+      </div>
+      <div class="brand-text">
+        <h1>AirSense IoT</h1>
+        <p>ESP32 Environmental & Air Quality Monitor (MPMC T-3)</p>
+      </div>
+    </div>
+
+    <!-- Connection & Controls Toolbar -->
+    <div class="nav-controls">
+      <div class="connection-box">
+        <span class="status-indicator" id="connIndicator"></span>
+        <span class="status-label" id="connStatusText">Connecting...</span>
+      </div>
+
+      <div class="endpoint-input-wrapper">
+        <input type="text" id="espIpInput" placeholder="ESP32 IP or URL (e.g. 192.168.4.1)" title="Enter ESP32 IP or Cloud Server URL">
+        <button id="btnConnect" class="btn btn-primary" title="Connect to ESP32">
+          <i class="fa-solid fa-plug"></i> Connect
+        </button>
+      </div>
+
+      <!-- Mode Switcher -->
+      <button id="btnToggleDemo" class="btn btn-secondary" title="Toggle Demo Simulator Mode">
+        <i class="fa-solid fa-flask"></i> <span id="demoBtnText">Demo Mode</span>
+      </button>
+
+      <!-- Audio Mute Toggle -->
+      <button id="btnToggleAudio" class="btn btn-icon" title="Toggle Web Audio Alarm">
+        <i class="fa-solid fa-volume-high" id="audioIcon"></i>
+      </button>
+
+      <!-- Pinout & Viva Modal Trigger -->
+      <button id="btnOpenPinout" class="btn btn-icon" title="View Hardware Pinout & Circuit">
+        <i class="fa-solid fa-microchip"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="dashboard-container">
+    
+    <!-- Warmup & System Alert Banner -->
+    <section class="banner-section">
+      <!-- Sensor Preheating Alert Banner (MQ-135 requires warmup) -->
+      <div id="warmupBanner" class="alert-banner banner-info">
+        <i class="fa-solid fa-hourglass-half banner-icon fa-spin"></i>
+        <div class="banner-content">
+          <strong>MQ-135 Heating & Stabilization Phase:</strong>
+          <span id="warmupText">Sensor stabilizing. Remaining warm-up: </span>
+          <span class="countdown-badge" id="warmupCountdown">45s</span>
+        </div>
+      </div>
+
+      <!-- Air Quality Global Status Banner -->
+      <div id="statusBanner" class="alert-banner banner-normal">
+        <i class="fa-solid fa-circle-check banner-icon" id="bannerIcon"></i>
+        <div class="banner-content">
+          <h3 id="bannerTitle">AIR QUALITY STATUS: NORMAL</h3>
+          <p id="bannerDesc">All environmental parameters (MQ-135, Temperature, Humidity) are within safe baseline limits.</p>
+        </div>
+        <div class="banner-badge">
+          <span class="pulse-dot"></span>
+          <span id="bannerStateTag">NORMAL</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 Main Metric KPI Cards -->
+    <section class="metrics-grid">
+      
+      <!-- Card 1: MQ-135 Air Quality -->
+      <div class="metric-card card-gas" id="cardGas">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon"><i class="fa-solid fa-smog"></i></div>
+            <div>
+              <h3>Air Quality (MQ-135)</h3>
+              <p class="subtitle">GPIO 34 &bull; 12-Bit Analog Input</p>
+            </div>
+          </div>
+          <span class="badge badge-normal" id="gasQualityBadge">GOOD</span>
+        </div>
+
+        <div class="metric-body">
+          <div class="primary-value">
+            <span id="gasPpm">415</span>
+            <span class="unit">PPM eq.</span>
+          </div>
+          <div class="sub-values">
+            <div class="sub-val">
+              <span class="lbl">ADC Value:</span>
+              <span class="val font-mono" id="gasAdc">1280</span> / 4095
+            </div>
+            <div class="sub-val">
+              <span class="lbl">Scaled Voltage:</span>
+              <span class="val font-mono" id="gasVolt">1.03</span> V
+            </div>
+          </div>
+
+          <!-- Gauge Progress Bar -->
+          <div class="gauge-wrapper">
+            <div class="gauge-bar-bg">
+              <div class="gauge-bar-fill" id="gasGaugeFill" style="width: 32%;"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>0 (Clean)</span>
+              <span>1200 (Warn)</span>
+              <span>2000 (Alert)</span>
+              <span>4095 (Hazard)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <span><i class="fa-solid fa-clock"></i> Updated: <span id="gasUpdated">Just now</span></span>
+          <span class="target-gas-tags">Detects: CO2, Smoke, NH3, Benzene</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Temperature (DHT11) -->
+      <div class="metric-card card-temp" id="cardTemp">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon"><i class="fa-solid fa-temperature-half"></i></div>
+            <div>
+              <h3>Ambient Temperature</h3>
+              <p class="subtitle">GPIO 12 &bull; DHT11 Digital Sensor</p>
+            </div>
+          </div>
+          <span class="badge badge-normal" id="tempBadge">COMFORTABLE</span>
+        </div>
+
+        <div class="metric-body">
+          <div class="primary-value">
+            <span id="tempVal">26.8</span>
+            <span class="unit">°C</span>
+          </div>
+          <div class="sub-values">
+            <div class="sub-val">
+              <span class="lbl">Fahrenheit:</span>
+              <span class="val font-mono" id="tempFVal">80.2</span> °F
+            </div>
+            <div class="sub-val">
+              <span class="lbl">Heat Index:</span>
+              <span class="val font-mono" id="heatIndexVal">27.4</span> °C
+            </div>
+          </div>
+
+          <div class="gauge-wrapper">
+            <div class="gauge-bar-bg">
+              <div class="gauge-bar-fill fill-temp" id="tempGaugeFill" style="width: 53%;"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>0°C (Cold)</span>
+              <span>25°C (Ideal)</span>
+              <span>35°C (Warm)</span>
+              <span>50°C (Max)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <span><i class="fa-solid fa-shield-halved"></i> Operating: 0°C to 50°C</span>
+          <span id="tempStatusDesc">Optimal room range</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Relative Humidity (DHT11) -->
+      <div class="metric-card card-humidity" id="cardHumidity">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon"><i class="fa-solid fa-droplet"></i></div>
+            <div>
+              <h3>Relative Humidity</h3>
+              <p class="subtitle">GPIO 12 &bull; DHT11 Humidity Sensor</p>
+            </div>
+          </div>
+          <span class="badge badge-normal" id="humBadge">OPTIMAL</span>
+        </div>
+
+        <div class="metric-body">
+          <div class="primary-value">
+            <span id="humVal">54</span>
+            <span class="unit">% RH</span>
+          </div>
+          <div class="sub-values">
+            <div class="sub-val">
+              <span class="lbl">Dew Point:</span>
+              <span class="val font-mono" id="dewPointVal">16.8</span> °C
+            </div>
+            <div class="sub-val">
+              <span class="lbl">Air Condition:</span>
+              <span class="val font-mono" id="comfortLevel">Pleasant</span>
+            </div>
+          </div>
+
+          <div class="gauge-wrapper">
+            <div class="gauge-bar-bg">
+              <div class="gauge-bar-fill fill-humidity" id="humGaugeFill" style="width: 54%;"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>20% (Dry)</span>
+              <span>45% (Optimal)</span>
+              <span>65% (Moist)</span>
+              <span>90% (Damp)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <span><i class="fa-solid fa-arrows-rotate"></i> Sampling cycle: 2s</span>
+          <span>Target: 40% - 60%</span>
+        </div>
+      </div>
+
+      <!-- Card 4: Hardware Actuators & Output State -->
+      <div class="metric-card card-actuators">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon"><i class="fa-solid fa-sliders"></i></div>
+            <div>
+              <h3>Hardware Indicators & Output</h3>
+              <p class="subtitle">ESP32 Actuator System Status</p>
+            </div>
+          </div>
+          <span class="badge badge-online">ACTIVE</span>
+        </div>
+
+        <div class="actuator-list">
+          <!-- Green LED -->
+          <div class="actuator-item">
+            <div class="actuator-info">
+              <span class="indicator-led led-green" id="ledGreenIndicator"></span>
+              <div>
+                <strong>Green LED (GPIO 18)</strong>
+                <p>Normal Air Quality Indicator</p>
+              </div>
+            </div>
+            <span class="state-pill state-on" id="greenLedState">ON</span>
+          </div>
+
+          <!-- Red LED -->
+          <div class="actuator-item">
+            <div class="actuator-info">
+              <span class="indicator-led led-red off" id="ledRedIndicator"></span>
+              <div>
+                <strong>Red LED (GPIO 19)</strong>
+                <p>Warning / Alert Indicator</p>
+              </div>
+            </div>
+            <span class="state-pill state-off" id="redLedState">OFF</span>
+          </div>
+
+          <!-- Buzzer -->
+          <div class="actuator-item">
+            <div class="actuator-info">
+              <i class="fa-solid fa-bell actuator-icon" id="buzzerIcon"></i>
+              <div>
+                <strong>Active Buzzer (GPIO 21)</strong>
+                <p>Audible Siren Alarm</p>
+              </div>
+            </div>
+            <span class="state-pill state-off" id="buzzerState">SILENT</span>
+          </div>
+
+          <!-- OLED Display -->
+          <div class="actuator-item">
+            <div class="actuator-info">
+              <i class="fa-solid fa-tv actuator-icon text-cyan"></i>
+              <div>
+                <strong>OLED 0.96" SSD1306</strong>
+                <p>I2C: SDA (GPIO 22), SCL (GPIO 23)</p>
+              </div>
+            </div>
+            <span class="state-pill state-on">ACTIVE</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button id="btnTestAlarm" class="btn btn-sm btn-outline">
+            <i class="fa-solid fa-bolt"></i> Test Alarm Sequence
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Real-time Chart Section -->
+    <section class="charts-section">
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">
+            <i class="fa-solid fa-chart-line"></i>
+            <h3>Real-Time Air Quality Trend (MQ-135 Analog / PPM)</h3>
+          </div>
+          <div class="chart-legend-custom">
+            <span class="legend-dot dot-gas"></span> Gas Level (PPM)
+            <span class="legend-line line-warning"></span> Warning Threshold (<span id="legendWarnVal">1200</span>)
+            <span class="legend-line line-danger"></span> Alert Threshold (<span id="legendAlertVal">2000</span>)
+          </div>
+        </div>
+        <div class="chart-canvas-wrapper">
+          <canvas id="airQualityChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">
+            <i class="fa-solid fa-chart-area"></i>
+            <h3>Temperature (°C) & Relative Humidity (%) Trend</h3>
+          </div>
+          <div class="chart-legend-custom">
+            <span class="legend-dot dot-temp"></span> Temperature (°C)
+            <span class="legend-dot dot-hum"></span> Humidity (%)
+          </div>
+        </div>
+        <div class="chart-canvas-wrapper">
+          <canvas id="tempHumChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Threshold Controls & Calibration Settings -->
+    <section class="controls-section">
+      <div class="controls-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="card-icon"><i class="fa-solid fa-gears"></i></div>
+            <div>
+              <h3>Intelligent Threshold Configuration</h3>
+              <p class="subtitle">Dynamically adjust decision boundaries for warning & buzzer triggers</p>
+            </div>
+          </div>
+          <button id="btnSaveThresholds" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-floppy-disk"></i> Apply Settings
+          </button>
+        </div>
+
+        <div class="controls-grid">
+          <!-- Warning Threshold Slider -->
+          <div class="control-box">
+            <div class="control-label-row">
+              <label for="warnThresholdSlider">
+                <i class="fa-solid fa-triangle-exclamation text-warning"></i> Warning Level Threshold (ADC):
+              </label>
+              <span class="control-val font-mono" id="warnThresholdDisplay">1200</span>
+            </div>
+            <input type="range" id="warnThresholdSlider" min="500" max="3000" step="50" value="1200">
+            <p class="control-hint">When MQ-135 ADC exceeds this value, Yellow Warning activates and OLED flags warning.</p>
+          </div>
+
+          <!-- Alert Threshold Slider -->
+          <div class="control-box">
+            <div class="control-label-row">
+              <label for="alertThresholdSlider">
+                <i class="fa-solid fa-radiation text-danger"></i> Critical Alarm Threshold (ADC):
+              </label>
+              <span class="control-val font-mono" id="alertThresholdDisplay">2000</span>
+            </div>
+            <input type="range" id="alertThresholdSlider" min="1500" max="4000" step="50" value="2000">
+            <p class="control-hint">When MQ-135 ADC exceeds this value, Red LED (GPIO 19) activates and Buzzer (GPIO 21) sounds.</p>
+          </div>
+
+          <!-- Polling Interval -->
+          <div class="control-box">
+            <div class="control-label-row">
+              <label for="pollIntervalSelect">
+                <i class="fa-solid fa-clock-rotate-left"></i> Web Refresh Rate:
+              </label>
+            </div>
+            <select id="pollIntervalSelect" class="form-select">
+              <option value="1000">1.0 Second (Real-Time)</option>
+              <option value="2000" selected>2.0 Seconds (Recommended)</option>
+              <option value="5000">5.0 Seconds (Battery/Low Power)</option>
+            </select>
+            <p class="control-hint">DHT11 hardware minimum cycle is 1-2 seconds between read attempts.</p>
+          </div>
+
+          <!-- Calibration Offset / Voltage Divider multiplier -->
+          <div class="control-box">
+            <div class="control-label-row">
+              <label for="dividerRatioInput">
+                <i class="fa-solid fa-calculator"></i> Voltage Divider Ratio:
+              </label>
+              <span class="control-val font-mono" id="dividerRatioDisplay">1.50x</span>
+            </div>
+            <input type="range" id="dividerRatioInput" min="1.0" max="2.0" step="0.05" value="1.50">
+            <p class="control-hint">Compensation for resistor divider on GPIO 34 (e.g. 10k/20k drops 5V to 3.3V).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Data Logs & CSV Export Table -->
+    <section class="logs-section">
+      <div class="card-header">
+        <div class="card-title-group">
+          <div class="card-icon"><i class="fa-solid fa-database"></i></div>
+          <div>
+            <h3>Real-Time Telemetry Data Log</h3>
+            <p class="subtitle">Latest 20 continuous sensor readings captured from ESP32</p>
+          </div>
+        </div>
+        <div class="log-actions">
+          <button id="btnClearLog" class="btn btn-secondary btn-sm">
+            <i class="fa-solid fa-trash-can"></i> Clear
+          </button>
+          <button id="btnExportCsv" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="log-table" id="telemetryTable">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Air Quality (ADC)</th>
+              <th>MQ-135 (PPM eq.)</th>
+              <th>Voltage (V)</th>
+              <th>Temp (°C)</th>
+              <th>Humidity (%)</th>
+              <th>Status</th>
+              <th>Actuators</th>
+            </tr>
+          </thead>
+          <tbody id="telemetryTableBody">
+            <!-- Dynamically populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Hardware Pinout & Viva Reference Modal -->
+  <div class="modal-overlay" id="pinoutModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-microchip"></i> ESP32 Pin Connections & Project Architecture</h3>
+        <button class="btn-close" id="btnCloseModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="pinout-table-wrapper">
+          <table class="pinout-table">
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Component Pin</th>
+                <th>ESP32 Pin</th>
+                <th>Description & Engineering Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>MQ-135 Gas Sensor</strong></td>
+                <td>A0 (Analog Out)</td>
+                <td><span class="pin-tag pin-analog">GPIO 34</span></td>
+                <td>Input-only ADC1 pin. Must use resistor voltage divider (5V &rarr; 3.3V)</td>
+              </tr>
+              <tr>
+                <td><strong>MQ-135 Gas Sensor</strong></td>
+                <td>VCC &amp; GND</td>
+                <td><span class="pin-tag pin-pwr">5V &amp; GND</span></td>
+                <td>Internal heater coil requires 5V to maintain 150-200°C operational temp</td>
+              </tr>
+              <tr>
+                <td><strong>DHT11 Sensor</strong></td>
+                <td>Data Pin (D)</td>
+                <td><span class="pin-tag pin-gpio">GPIO 12</span></td>
+                <td>Single-bus digital signal. (Strapping pin MTDI; do not pull high at boot)</td>
+              </tr>
+              <tr>
+                <td><strong>DHT11 Sensor</strong></td>
+                <td>VCC &amp; GND</td>
+                <td><span class="pin-tag pin-pwr">3.3V &amp; GND</span></td>
+                <td>Runs reliably on ESP32 3.3V rail with internal pull-up</td>
+              </tr>
+              <tr>
+                <td><strong>0.96" OLED Display</strong></td>
+                <td>SDA (Data)</td>
+                <td><span class="pin-tag pin-i2c">GPIO 22</span></td>
+                <td>I2C Data wire (SSD1306 128x64 display)</td>
+              </tr>
+              <tr>
+                <td><strong>0.96" OLED Display</strong></td>
+                <td>SCL (Clock)</td>
+                <td><span class="pin-tag pin-i2c">GPIO 23</span></td>
+                <td>I2C Clock wire (Custom assigned pins via <code>Wire.begin(22, 23)</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>0.96" OLED Display</strong></td>
+                <td>VCC &amp; GND</td>
+                <td><span class="pin-tag pin-pwr">3.3V &amp; GND</span></td>
+                <td>Standard I2C power rail</td>
+              </tr>
+              <tr>
+                <td><strong>Green LED</strong></td>
+                <td>Anode (+)</td>
+                <td><span class="pin-tag pin-out">GPIO 18</span></td>
+                <td>Connected through 220Ω / 330Ω current limiting resistor. Lights when Safe</td>
+              </tr>
+              <tr>
+                <td><strong>Red LED</strong></td>
+                <td>Anode (+)</td>
+                <td><span class="pin-tag pin-out">GPIO 19</span></td>
+                <td>Connected through 220Ω / 330Ω resistor. Flashes when Warning/Alert active</td>
+              </tr>
+              <tr>
+                <td><strong>Active Buzzer</strong></td>
+                <td>Positive (+)</td>
+                <td><span class="pin-tag pin-out">GPIO 21</span></td>
+                <td>Audible siren triggered when MQ-135 crosses warning/critical threshold</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="viva-quick-tips">
+          <h4><i class="fa-solid fa-graduation-cap"></i> Teacher Viva Key Talking Points:</h4>
+          <ul>
+            <li><strong>Why Voltage Divider on GPIO 34?</strong> The MQ-135 is powered by 5V, so its analog output can reach above 3.3V. ESP32 ADC pins can only safely accept maximum 3.3V (0-3.3V input range). Feeding 5V directly damages the ESP32 silicon!</li>
+            <li><strong>Why GPIO 12 for DHT11?</strong> GPIO 12 is a bootstrap pin (MTDI). If held high at reset, flash voltage might switch to 1.8V instead of 3.3V. Our firmware and wiring ensure safe operation after power-on.</li>
+            <li><strong>Why GPIO 22 &amp; 23 for OLED?</strong> Default ESP32 I2C pins are 21 and 22, but since GPIO 21 is assigned to the Buzzer, we route SCL to GPIO 23 and SDA to GPIO 22 using <code>Wire.begin(22, 23)</code>.</li>
+            <li><strong>3 Presentation Modules:</strong> Module 1: Sensing (MQ-135, DHT11) &bull; Module 2: Acquisition &amp; Processing (ESP32 ADC, Threshold logic) &bull; Module 3: Alert &amp; Visualization (OLED, LEDs, Buzzer, Web Dashboard).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>ESP32 Real-Time Indoor Air Quality Monitoring System &bull; MPMC T-3 Project &bull; Built with HTML5, CSS3, Chart.js &amp; ESP32 IoT Engine</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
