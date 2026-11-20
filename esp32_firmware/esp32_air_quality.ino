@@ -10,7 +10,7 @@
  *   - Active Buzzer:       Negative (-) -> GND,     Positive (P) -> GPIO 21
  *   - Green LED (Safe):    Cathode (-) -> GND,      Anode (+) -> GPIO 18 (via 220-330 ohm resistor)
  *   - Red LED (Warning):   Cathode (-) -> GND,      Anode (+) -> GPIO 19 (via 220-330 ohm resistor)
- *   - 0.96" OLED Display:  GND -> GND, VCC -> 3.3V, SDA -> GPIO 22, SCL -> GPIO 23
+ *   - 0.96" OLED Display:  GND -> GND, VCC -> 3.3V, SDA -> GPIO 26, SCL -> GPIO 25
  * 
  * Required Arduino Libraries:
  *   1. "DHT sensor library" by Adafruit
@@ -35,8 +35,8 @@
 #define PIN_BUZZER        21  // Active Buzzer Positive (P)
 #define PIN_LED_GREEN     18  // Normal Condition Green LED
 #define PIN_LED_RED       19  // Warning / Alert Red LED
-#define PIN_OLED_SDA      22  // OLED I2C SDA wire
-#define PIN_OLED_SCL      23  // OLED I2C SCL wire
+#define PIN_OLED_SDA      26  // OLED I2C SDA wire (GPIO 26)
+#define PIN_OLED_SCL      25  // OLED I2C SCL wire (GPIO 25)
 
 #define DHTTYPE           DHT11
 #define SCREEN_WIDTH      128
@@ -346,7 +346,7 @@ void handleRoot() {
       <div class="hw-row"><span>Green LED (GPIO 18):</span> <span class="tag"><span class="dot dot-grn" id="grnDot"></span><span id="grnTxt">ON</span></span></div>
       <div class="hw-row"><span>Red LED (GPIO 19):</span> <span class="tag"><span class="dot dot-off" id="redDot"></span><span id="redTxt">OFF</span></span></div>
       <div class="hw-row"><span>Active Buzzer (GPIO 21):</span> <span class="tag" id="buzzStatus">SILENT</span></div>
-      <div class="hw-row"><span>OLED (GPIO 22/23):</span> <span class="tag" id="oledStatus">DETECTED</span></div>
+      <div class="hw-row"><span>OLED (GPIO 26/25):</span> <span class="tag" id="oledStatus">DETECTED</span></div>
     </div>
   </div>
 
@@ -411,7 +411,7 @@ void setup() {
   digitalWrite(PIN_LED_RED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
 
-  // Initialize Custom I2C (SDA = GPIO 22, SCL = GPIO 23)
+  // Initialize Custom I2C (SDA = GPIO 26, SCL = GPIO 25)
   Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
 
   // Initialize OLED (Graceful fallback if OLED is not attached)
@@ -427,7 +427,7 @@ void setup() {
     display.display();
     delay(1000);
   } else {
-    Serial.println("[Notice] OLED display not detected on GPIO 22/23. Web Dashboard active.");
+    Serial.println("[Notice] OLED display not detected on GPIO 26/25. Web Dashboard active.");
   }
 
   // Initialize DHT11

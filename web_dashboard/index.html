@@ -300,7 +300,7 @@
               <i class="fa-solid fa-tv actuator-icon text-cyan"></i>
               <div>
                 <strong>OLED 0.96" SSD1306</strong>
-                <p>I2C: SDA (GPIO 22), SCL (GPIO 23)</p>
+                <p>I2C: SDA (GPIO 26), SCL (GPIO 25)</p>
               </div>
             </div>
             <span class="state-pill state-on">ACTIVE</span>
@@ -548,14 +548,14 @@
               <tr>
                 <td><strong>0.96" OLED Display</strong></td>
                 <td>SDA (Data)</td>
-                <td><span class="pin-tag pin-i2c">GPIO 22</span></td>
+                <td><span class="pin-tag pin-i2c">GPIO 26</span></td>
                 <td>I2C Data wire (SSD1306 128x64 display)</td>
               </tr>
               <tr>
                 <td><strong>0.96" OLED Display</strong></td>
                 <td>SCL (Clock)</td>
-                <td><span class="pin-tag pin-i2c">GPIO 23</span></td>
-                <td>I2C Clock wire (Custom assigned pins via <code>Wire.begin(22, 23)</code>)</td>
+                <td><span class="pin-tag pin-i2c">GPIO 25</span></td>
+                <td>I2C Clock wire (Custom assigned pins via <code>Wire.begin(26, 25)</code>)</td>
               </tr>
               <tr>
                 <td><strong>0.96" OLED Display</strong></td>
@@ -572,7 +572,7 @@
           <ul>
             <li><strong>Why Voltage Divider on GPIO 34?</strong> The MQ-135 is powered by 5V, so its analog output can reach above 3.3V. ESP32 ADC pins can only safely accept maximum 3.3V (0-3.3V input range). Feeding 5V directly damages the ESP32 silicon!</li>
             <li><strong>Why GPIO 12 for DHT11?</strong> GPIO 12 is a bootstrap pin (MTDI). If held high at reset, flash voltage might switch to 1.8V instead of 3.3V. Our firmware and wiring ensure safe operation after power-on.</li>
-            <li><strong>Why GPIO 22 &amp; 23 for OLED?</strong> Default ESP32 I2C pins are 21 and 22, but since GPIO 21 is assigned to the Buzzer, we route SCL to GPIO 23 and SDA to GPIO 22 using <code>Wire.begin(22, 23)</code>.</li>
+            <li><strong>Why GPIO 26 &amp; 25 for OLED?</strong> Default ESP32 I2C pins are 21 and 22, but since GPIO 21 is assigned to the Buzzer, we route SCL to GPIO 25 and SDA to GPIO 26 using <code>Wire.begin(26, 25)</code>.</li>
             <li><strong>3 Presentation Modules:</strong> Module 1: Sensing (MQ-135, DHT11) &bull; Module 2: Acquisition &amp; Processing (ESP32 ADC, Threshold logic) &bull; Module 3: Alert &amp; Visualization (OLED, LEDs, Buzzer, Web Dashboard).</li>
           </ul>
         </div>

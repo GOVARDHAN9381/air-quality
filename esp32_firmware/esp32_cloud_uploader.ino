@@ -9,7 +9,7 @@
  *   - Active Buzzer:       Negative (-) -> GND,     Positive (P) -> GPIO 21
  *   - Green LED (Safe):    Cathode (-) -> GND,      Anode (+) -> GPIO 18 (via 220-330 ohm resistor)
  *   - Red LED (Warning):   Cathode (-) -> GND,      Anode (+) -> GPIO 19 (via 220-330 ohm resistor)
- *   - 0.96" OLED Display:  GND -> GND, VCC -> 3.3V, SDA -> GPIO 22, SCL -> GPIO 23
+ *   - 0.96" OLED Display:  GND -> GND, VCC -> 3.3V, SDA -> GPIO 26, SCL -> GPIO 25
  * =========================================================================================
  */
 
@@ -27,8 +27,8 @@
 #define PIN_BUZZER        21  // Active Buzzer Positive (P)
 #define PIN_LED_GREEN     18  // Normal Condition Green LED
 #define PIN_LED_RED       19  // Warning / Alert Red LED
-#define PIN_OLED_SDA      22  // OLED I2C SDA
-#define PIN_OLED_SCL      23  // OLED I2C SCL
+#define PIN_OLED_SDA      26  // OLED I2C SDA (GPIO 26)
+#define PIN_OLED_SCL      25  // OLED I2C SCL (GPIO 25)
 
 #define DHTTYPE           DHT11
 #define SCREEN_WIDTH      128
@@ -206,7 +206,7 @@ void setup() {
   digitalWrite(PIN_LED_RED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
 
-  // Initialize Custom I2C (SDA = GPIO 22, SCL = GPIO 23)
+  // Initialize Custom I2C (SDA = GPIO 26, SCL = GPIO 25)
   Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
 
   // Initialize OLED (Graceful fallback if not connected)

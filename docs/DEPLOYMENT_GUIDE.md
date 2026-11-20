@@ -18,7 +18,7 @@ This guide provides 3 proven deployment methods to share real-time analog air qu
   |  - ADC1_CH6 Oversampling (12-bit, 0-4095)             |
   |  - DHT11 Read (GPIO 12)                               |
   |  - Threshold Decision Engine (Normal / Warn / Alert)  |
-  |  - OLED Display 128x64 (GPIO 22/23)                   |
+  |  - OLED Display 128x64 (GPIO 26/25)                   |
   |  - Actuators: Green LED (18), Red LED (19), Buzzer (21)|
   +-------------------------------------------------------+
           |

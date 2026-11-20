@@ -20,8 +20,8 @@
 | **Green LED (Normal)** | **Cathode (-)** | **GND** | Ground | Common system ground. |
 | **Red LED (Warning)** | **Anode (+)** | **GPIO 19** | Digital Output | Connected via **220Ω or 330Ω** resistor. Steady on Warning; flashes during Alert. |
 | **Red LED (Warning)** | **Cathode (-)** | **GND** | Ground | Common system ground. |
-| **0.96" OLED (SSD1306)**| **SDA (Data)** | **GPIO 22** | I2C Data | Custom I2C data wire assigned via `Wire.begin(22, 23)`. |
-| **0.96" OLED (SSD1306)**| **SCL (Clock)** | **GPIO 23** | I2C Clock | Custom I2C clock wire assigned via `Wire.begin(22, 23)`. |
+| **0.96" OLED (SSD1306)**| **SDA (Data)** | **GPIO 26** | I2C Data | Custom I2C data wire assigned via `Wire.begin(26, 25)`. |
+| **0.96" OLED (SSD1306)**| **SCL (Clock)** | **GPIO 25** | I2C Clock | Custom I2C clock wire assigned via `Wire.begin(26, 25)`. |
 | **0.96" OLED (SSD1306)**| **VCC & GND** | **3.3V & GND** | Power (3.3V DC) | Standard 3.3V I2C power rail. |
 
 ---
@@ -54,11 +54,11 @@
 
 ---
 
-### C. Custom I2C Pin Assignment (GPIO 22 & GPIO 23)
+### C. Custom I2C Pin Assignment (GPIO 26 & GPIO 25)
 - The default I2C pins on the ESP32 are GPIO 21 (SDA) and GPIO 22 (SCL).
-- Since **GPIO 21 is assigned to drive the Active Buzzer**, we remapped I2C in firmware via `Wire.begin(22, 23)`:
-  - **SDA &rarr; GPIO 22**
-  - **SCL &rarr; GPIO 23**
+- Since **GPIO 21 is assigned to drive the Active Buzzer**, we remapped I2C in firmware via `Wire.begin(26, 25)`:
+  - **SDA &rarr; GPIO 26**
+  - **SCL &rarr; GPIO 25**
 - In addition, our firmware features **graceful hardware detection**: if the OLED is plugged in, it renders full graphics; if unplugged, the ESP32 continues running smoothly without hanging!
 
 ---

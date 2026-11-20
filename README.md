@@ -21,8 +21,8 @@ An end-to-end IoT embedded solution for real-time indoor air quality monitoring,
 | **Green LED (Safe)** | **Cathode (-)** | **GND** | Common system ground |
 | **Red LED (Alert)** | **Anode (+)** | **GPIO 19** | Connected via 220Ω resistor. Steady on Warning; flashes during Alert |
 | **Red LED (Alert)** | **Cathode (-)** | **GND** | Common system ground |
-| **0.96" OLED (SSD1306)** | **SDA (Data)** | **GPIO 22** | Custom I2C data wire |
-| **0.96" OLED (SSD1306)** | **SCL (Clock)** | **GPIO 23** | Custom I2C clock wire |
+| **0.96" OLED (SSD1306)** | **SDA (Data)** | **GPIO 26** | Custom I2C data wire |
+| **0.96" OLED (SSD1306)** | **SCL (Clock)** | **GPIO 25** | Custom I2C clock wire |
 | **0.96" OLED (SSD1306)** | **VCC & GND** | **3.3V & GND**| 3.3V I2C display power rail |
 
 ---

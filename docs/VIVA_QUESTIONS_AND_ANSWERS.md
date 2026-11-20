@@ -1,6 +1,6 @@
 # MPMC T-3 Viva Voce Examination Guide
 ## ESP32-Based Real-Time Indoor Air Quality Monitoring, Environmental Sensing and Intelligent Warning System
-**Hardware Configuration: DHT11 (GPIO 12) + MQ-135 (GPIO 34) + Active Buzzer (GPIO 21) + Green LED (GPIO 18) + Red LED (GPIO 19) + OLED (GPIO 22/23)**
+**Hardware Configuration: DHT11 (GPIO 12) + MQ-135 (GPIO 34) + Active Buzzer (GPIO 21) + Green LED (GPIO 18) + Red LED (GPIO 19) + OLED (GPIO 26/25)**
 
 ---
 
@@ -28,13 +28,13 @@ During reset or power-up boot, the ESP32 hardware samples the voltage on GPIO 12
 - If GPIO 12 is **LOW** (default), the flash memory regulator outputs **3.3V**.
 Since standard ESP32 DevKit boards use 3.3V SPI flash memory chips, if an external circuit pulls GPIO 12 HIGH during boot, flash undervolt occurs and the ESP32 fails to start. Once booted, however, GPIO 12 operates as a completely standard digital input for DHT11 single-wire communication.
 
-#### Q4. Why did you connect the OLED display to GPIO 22 and 23 instead of the default I2C pins (GPIO 21 and 22)?
+#### Q4. Why did you connect the OLED display to GPIO 26 and 25 instead of the default I2C pins (GPIO 21 and 22)?
 **Answer:**
 By default in Arduino ESP32 core, I2C SDA is on GPIO 21 and SCL is on GPIO 22.
 However, in our circuit design, **GPIO 21 is allocated to drive the Active Buzzer**.
 Thanks to the ESP32's internal GPIO multiplexer (GPIO Matrix), we remapped the I2C peripheral to custom pins by calling:
 ```cpp
-Wire.begin(22, 23); // SDA = GPIO 22, SCL = GPIO 23
+Wire.begin(26, 25); // SDA = GPIO 26, SCL = GPIO 25
 ```
 This isolates the digital acoustic alarm from the high-speed I2C serial clock bus. In addition, our firmware includes graceful hardware detection: if the OLED is disconnected, the ESP32 continues running smoothly without hanging!
 
