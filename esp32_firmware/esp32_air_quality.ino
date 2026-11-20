@@ -185,19 +185,73 @@ void updateActuatorsAndStatus() {
   }
 }
 
-// ================= OLED DISPLAY UPDATE =================
+// ================= OLED DISPLAY INITIALIZATION & UPDATE =================
+bool oledHeartbeat = false;
+
+// Auto-detect and initialize SSD1306 OLED at 0x3C or 0x3D
+bool initOLEDDisplay() {
+  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
+  Wire.setClock(100000); // 100 kHz standard mode for clean signal
+  delay(50);
+
+  // Try standard I2C address 0x3C
+  if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("[OLED SUCCESS] SSD1306 OLED detected and initialized at address 0x3C!");
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(15, 15);
+    display.println("AirSense ESP32");
+    display.setCursor(15, 32);
+    display.println("OLED Ready (0x3C)");
+    display.display();
+    return true;
+  }
+
+  // Fallback try alternate I2C address 0x3D
+  if (display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
+    Serial.println("[OLED SUCCESS] SSD1306 OLED detected and initialized at address 0x3D!");
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(15, 15);
+    display.println("AirSense ESP32");
+    display.setCursor(15, 32);
+    display.println("OLED Ready (0x3D)");
+    display.display();
+    return true;
+  }
+
+  Serial.println("[OLED Notice] OLED display not detected on SDA=GPIO 26, SCL=GPIO 25.");
+  Serial.println("  -> Check wiring: OLED SCL -> GPIO 25, OLED SDA -> GPIO 26, VCC -> 3.3V, GND -> GND.");
+  return false;
+}
+
 void updateOLED() {
-  if (!oledAvailable) return;
+  // If display wasn't ready at startup, auto-retry connecting every 3 seconds!
+  if (!oledAvailable) {
+    static unsigned long lastOledRetry = 0;
+    if (millis() - lastOledRetry > 3000) {
+      lastOledRetry = millis();
+      oledAvailable = initOLEDDisplay();
+    }
+    if (!oledAvailable) return;
+  }
+
+  oledHeartbeat = !oledHeartbeat; // Toggle blinking indicator dot every refresh
 
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
 
-  // Line 1: Header / Title
+  // Line 1: Header / Title + Blinking Heartbeat Dot (Shows screen is active!)
   display.setTextSize(1);
   display.setCursor(0, 0);
   display.print("AIR MONITOR [");
   display.print(systemStatus);
   display.print("]");
+  if (oledHeartbeat) {
+    display.fillCircle(123, 4, 2, SSD1306_WHITE); // Blinking live indicator dot in corner
+  }
   display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
   // Line 2: Air Quality Metric
@@ -211,7 +265,7 @@ void updateOLED() {
   // Line 3: Temperature & Humidity
   display.setCursor(0, 27);
   display.print("Temp: ");
-  if (isnan(temperatureC)) {
+  if (isnan(temperatureC) || temperatureC == 0.0) {
     display.print("-- C");
   } else {
     display.print(temperatureC, 1);
@@ -221,7 +275,7 @@ void updateOLED() {
 
   display.setCursor(0, 40);
   display.print("Humidity: ");
-  if (isnan(humidityPct)) {
+  if (isnan(humidityPct) || humidityPct == 0.0) {
     display.print("-- %");
   } else {
     display.print(humidityPct, 1);
@@ -411,24 +465,8 @@ void setup() {
   digitalWrite(PIN_LED_RED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
 
-  // Initialize Custom I2C (SDA = GPIO 26, SCL = GPIO 25)
-  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
-
-  // Initialize OLED (Graceful fallback if OLED is not attached)
-  if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR)) {
-    oledAvailable = true;
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(10, 20);
-    display.println("AirSense ESP32");
-    display.setCursor(10, 35);
-    display.println("System Ready...");
-    display.display();
-    delay(1000);
-  } else {
-    Serial.println("[Notice] OLED display not detected on GPIO 26/25. Web Dashboard active.");
-  }
+  // Initialize Custom I2C and auto-detect OLED at 0x3C or 0x3D
+  oledAvailable = initOLEDDisplay();
 
   // Initialize DHT11
   dht.begin();
@@ -514,8 +552,15 @@ void loop() {
     Serial.printf("ADC: %d | Volt: %.2fV | Temp: %.1fC | Hum: %.1f%% | Status: %s | Web IP: %s\n",
                   rawAdc, voltage, temperatureC, humidityPct, systemStatus.c_str(), activeIp.c_str());
 
-    // Update OLED Display
+    // Update OLED Display with live values
     updateOLED();
+
+    // Visual Heartbeat on Green LED (brief blink indicates active sensing cycle)
+    if (systemStatus == "NORMAL") {
+      digitalWrite(PIN_LED_GREEN, LOW);
+      delay(40);
+      digitalWrite(PIN_LED_GREEN, HIGH);
+    }
 
     // Push to Cloud Website (if configured)
     sendTelemetryToCloud();

@@ -154,9 +154,38 @@ void updateActuatorsAndStatus() {
   }
 }
 
+// Auto-detect and initialize SSD1306 OLED at 0x3C or 0x3D
+bool initOLEDDisplay() {
+  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
+  Wire.setClock(100000); // 100 kHz standard mode
+  delay(50);
+
+  if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("[OLED SUCCESS] SSD1306 OLED detected at address 0x3C!");
+    return true;
+  }
+  if (display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
+    Serial.println("[OLED SUCCESS] SSD1306 OLED detected at address 0x3D!");
+    return true;
+  }
+  Serial.println("[OLED Notice] OLED display not detected on SDA=GPIO 26, SCL=GPIO 25.");
+  return false;
+}
+
 // Update OLED Display (If attached)
+bool oledHeartbeat = false;
 void updateOLED() {
-  if (!oledAvailable) return;
+  // Auto-retry connecting if not detected at boot
+  if (!oledAvailable) {
+    static unsigned long lastOledRetry = 0;
+    if (millis() - lastOledRetry > 3000) {
+      lastOledRetry = millis();
+      oledAvailable = initOLEDDisplay();
+    }
+    if (!oledAvailable) return;
+  }
+
+  oledHeartbeat = !oledHeartbeat;
 
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -166,6 +195,9 @@ void updateOLED() {
   display.print("CLOUD IOT [");
   display.print(systemStatus);
   display.print("]");
+  if (oledHeartbeat) {
+    display.fillCircle(123, 4, 2, SSD1306_WHITE);
+  }
   display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
   display.setCursor(0, 15);
@@ -207,11 +239,8 @@ void setup() {
   digitalWrite(PIN_BUZZER, LOW);
 
   // Initialize Custom I2C (SDA = GPIO 26, SCL = GPIO 25)
-  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
-
-  // Initialize OLED (Graceful fallback if not connected)
-  if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR)) {
-    oledAvailable = true;
+  oledAvailable = initOLEDDisplay();
+  if (oledAvailable) {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
