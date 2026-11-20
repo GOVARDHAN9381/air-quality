@@ -27,8 +27,10 @@ app.use(express.urlencoded({ extended: true }));
 // Serve frontend dashboard files statically
 app.use(express.static(publicDir));
 
-// In-memory state & history buffer
+// In-memory state & multi-device buffer
+let devices = {};
 let currentTelemetry = {
+  deviceId: 'ESP32-Primary',
   adc: 2400,
   ppm: 420,
   voltage: 1.93,
@@ -42,67 +44,96 @@ let currentTelemetry = {
   alertThresh: 3200,
   updatedAt: new Date().toISOString()
 };
+devices['ESP32-Primary'] = currentTelemetry;
 
 const telemetryHistory = [];
 const MAX_HISTORY = 100;
 
 // REST API 1: Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'online', clientsConnected: io.engine.clientsCount, time: new Date() });
+  res.json({ status: 'online', clientsConnected: io.engine.clientsCount, devicesCount: Object.keys(devices).length, time: new Date() });
 });
 
-// REST API 2: Get current telemetry snapshot
+// REST API 2: List all connected devices
+app.get('/api/devices', (req, res) => {
+  const deviceList = Object.keys(devices).map(id => ({
+    id,
+    lastSeen: devices[id].updatedAt,
+    status: devices[id].status
+  }));
+  res.json(deviceList);
+});
+
+// REST API 3: Get current telemetry snapshot (optionally by device)
 app.get('/api/data', (req, res) => {
+  const targetDevice = req.query.device;
+  if (targetDevice && devices[targetDevice]) {
+    return res.json(devices[targetDevice]);
+  }
   res.json(currentTelemetry);
 });
 
-// REST API 3: Get historical log
+// REST API 4: Get historical log
 app.get('/api/history', (req, res) => {
+  const targetDevice = req.query.device;
+  if (targetDevice) {
+    return res.json(telemetryHistory.filter(h => h.deviceId === targetDevice));
+  }
   res.json(telemetryHistory);
 });
 
-// REST API 4: ESP32 pushes new analog telemetry here
+// REST API 5: ESP32 pushes new analog telemetry here
 app.post('/api/telemetry', (req, res) => {
   const { adc, temp, hum, ppm, green, red, buzz } = req.body;
+  const devId = (req.body.deviceId || req.body.device || req.query.device || 'ESP32-Primary').trim();
 
   if (adc === undefined) {
     return res.status(400).json({ error: 'Missing adc value in payload' });
   }
 
+  const existingDev = devices[devId] || currentTelemetry;
+  const warnT = existingDev.warnThresh || 2700;
+  const alertT = existingDev.alertThresh || 3200;
+
   // Derive status based on thresholds
   let status = 'NORMAL';
-  if (adc >= currentTelemetry.alertThresh) {
+  if (adc >= alertT) {
     status = 'ALERT';
-  } else if (adc >= currentTelemetry.warnThresh) {
+  } else if (adc >= warnT) {
     status = 'WARNING';
   }
 
   const measuredV = (adc / 4095.0) * 3.3;
 
-  currentTelemetry = {
-    ...currentTelemetry,
+  const deviceTelemetry = {
+    deviceId: devId,
     adc: Number(adc),
     ppm: ppm ? Number(ppm) : Math.round(400 + Math.pow(adc / 600.0, 2.5) * 85),
     voltage: Number(measuredV.toFixed(2)),
-    temp: temp !== undefined ? Number(temp) : currentTelemetry.temp,
-    hum: hum !== undefined ? Number(hum) : currentTelemetry.hum,
+    temp: temp !== undefined ? Number(temp) : (existingDev.temp || 0),
+    hum: hum !== undefined ? Number(hum) : (existingDev.hum || 0),
     status,
     green: green !== undefined ? Number(green) : (status === 'NORMAL' ? 1 : 0),
     red: red !== undefined ? Number(red) : (status !== 'NORMAL' ? 1 : 0),
     buzz: buzz !== undefined ? Number(buzz) : (status === 'ALERT' ? 1 : 0),
+    warnThresh: warnT,
+    alertThresh: alertT,
     updatedAt: new Date().toISOString()
   };
 
+  devices[devId] = deviceTelemetry;
+  currentTelemetry = deviceTelemetry;
+
   // Add to history
-  telemetryHistory.unshift(currentTelemetry);
+  telemetryHistory.unshift(deviceTelemetry);
   if (telemetryHistory.length > MAX_HISTORY) telemetryHistory.pop();
 
   // Real-time broadcast to all browser clients
-  io.emit('telemetry_update', currentTelemetry);
+  io.emit('telemetry_update', deviceTelemetry);
 
-  console.log(`[ESP32 Telemetry] ADC: ${currentTelemetry.adc} | Temp: ${currentTelemetry.temp}C | Hum: ${currentTelemetry.hum}% | Status: ${currentTelemetry.status}`);
+  console.log(`[ESP32: ${devId}] ADC: ${deviceTelemetry.adc} | Temp: ${deviceTelemetry.temp}C | Hum: ${deviceTelemetry.hum}% | Status: ${deviceTelemetry.status}`);
 
-  res.status(200).json({ success: true, received: currentTelemetry });
+  res.status(200).json({ success: true, received: deviceTelemetry });
 });
 
 // REST API 5: Update thresholds from web UI

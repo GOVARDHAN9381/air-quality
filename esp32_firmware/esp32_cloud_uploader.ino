@@ -43,6 +43,9 @@ const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Enter your Wi-Fi Passwo
 // Cloud / Local Server Endpoint (Render Cloud Server)
 const char* cloudServerUrl = "https://air-quality-monitoring-75du.onrender.com/api/telemetry";
 
+// Device Identification
+const char* deviceId      = "ESP32-Govardhan"; // Change to your friend/device name!
+
 // Thresholds (Calibrated for your room's clean air baseline: ~2400)
 int thresholdWarning = 2700;   // Warning Level -> Red LED ON, Web Warning
 int thresholdAlert   = 3200;   // Critical Level -> Red LED Flashing + Buzzer Siren
@@ -103,6 +106,7 @@ void sendTelemetryToCloud() {
 
   // Construct JSON payload
   String jsonPayload = "{";
+  jsonPayload += "\"deviceId\":\"" + String(deviceId) + "\",";
   jsonPayload += "\"adc\":" + String(rawAdc) + ",";
   jsonPayload += "\"ppm\":" + String(estimatedPpm) + ",";
   jsonPayload += "\"voltage\":" + String(voltage, 2) + ",";

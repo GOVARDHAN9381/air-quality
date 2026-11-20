@@ -57,6 +57,9 @@ const char* wifi_password = "YOUR_WIFI_PASSWORD"; // <-- Change to your Wi-Fi pa
 // 2. Cloud Website URL (Render Cloud Server Endpoint)
 const char* cloudServerUrl = "https://air-quality-monitoring-75du.onrender.com/api/telemetry";
 
+// 3. Device Identification (Each student/friend can set their own name!)
+const char* deviceId      = "ESP32-Govardhan";    // <-- Change to your name (e.g. ESP32-Rahul, ESP32-Team1)
+
 // 3. SoftAP Fallback (ESP32 creates its own hotspot for college presentations)
 const char* ap_ssid       = "AirSense-ESP32-Hotspot";
 const char* ap_password   = "12345678";
@@ -121,6 +124,7 @@ void sendTelemetryToCloud() {
   http.addHeader("Content-Type", "application/json");
 
   String jsonPayload = "{";
+  jsonPayload += "\"deviceId\":\"" + String(deviceId) + "\",";
   jsonPayload += "\"adc\":" + String(rawAdc) + ",";
   jsonPayload += "\"ppm\":" + String(estimatedPpm) + ",";
   jsonPayload += "\"voltage\":" + String(voltage, 2) + ",";

@@ -77,6 +77,7 @@ function playAlarmBeep() {
 const el = {
   connIndicator: document.getElementById('connIndicator'),
   connStatusText: document.getElementById('connStatusText'),
+  deviceSelector: document.getElementById('deviceSelector'),
   espIpInput: document.getElementById('espIpInput'),
   btnConnect: document.getElementById('btnConnect'),
   btnToggleDemo: document.getElementById('btnToggleDemo'),
@@ -602,6 +603,29 @@ function generateDemoData() {
   });
 }
 
+// Populate Device Selector (Multi-ESP32 Support)
+async function refreshDeviceList() {
+  if (!el.deviceSelector || !window.location.protocol.startsWith('http')) return;
+  try {
+    const res = await fetch('/api/devices');
+    if (!res.ok) return;
+    const devices = await res.json();
+    const currentVal = el.deviceSelector.value;
+    el.deviceSelector.innerHTML = '<option value="" style="background:#0f172a; color:#f9fafb;">All Devices (Auto)</option>';
+    devices.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = `${d.id} [${d.status}]`;
+      opt.style.background = '#0f172a';
+      opt.style.color = '#f9fafb';
+      if (d.id === currentVal) opt.selected = true;
+      el.deviceSelector.appendChild(opt);
+    });
+  } catch (e) {
+    // Silently handle if offline
+  }
+}
+
 // Fetch live telemetry from REST Endpoint (Local ESP32 or Cloud Server)
 async function fetchEsp32Data() {
   const customIp = el.espIpInput.value.trim();
@@ -615,7 +639,7 @@ async function fetchEsp32Data() {
     apiEndpoint = `${target}/api/data`;
   } else if (window.location.protocol.startsWith('http')) {
     // Hosted on Render / Cloud or local server: fetch from relative API
-    apiEndpoint = '/api/data';
+    apiEndpoint = state.selectedDevice ? `/api/data?device=${encodeURIComponent(state.selectedDevice)}` : '/api/data';
   } else {
     apiEndpoint = `http://${state.endpoint}/api/data`;
   }
@@ -757,8 +781,34 @@ function exportToCsv() {
 
 // Event Listeners Setup
 function setupEventListeners() {
+  // 0. Multi-Device Selector Change
+  if (el.deviceSelector) {
+    el.deviceSelector.addEventListener('change', (e) => {
+      state.selectedDevice = e.target.value;
+      fetchEsp32Data();
+    });
+  }
+
   // 1. Connect Button
   el.btnConnect.addEventListener('click', () => {
+    const target = el.espIpInput.value.trim();
+    if (target) {
+      // Check if user entered an IP on HTTPS page
+      if (window.location.protocol === 'https:' && !target.startsWith('https://')) {
+        const rawHost = target.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+        const isIp = /^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?$/.test(rawHost);
+        if (isIp) {
+          const openDirectly = confirm(
+            `Browser HTTPS Security restricts fetching local ESP32 IP (${rawHost}) directly inside an HTTPS website.\n\n` +
+            `Click OK to open your local ESP32 web interface directly at http://${rawHost}/ in a new tab!`
+          );
+          if (openDirectly) {
+            window.open(`http://${rawHost}/`, '_blank');
+            return;
+          }
+        }
+      }
+    }
     state.isDemoMode = false;
     el.demoBtnText.textContent = 'Live ESP32';
     el.btnToggleDemo.classList.add('btn-primary');
@@ -897,11 +947,17 @@ window.addEventListener('DOMContentLoaded', () => {
         el.btnToggleDemo.classList.add('btn-primary');
         el.btnToggleDemo.classList.remove('btn-secondary');
         setConnectionState(true, 'Cloud Live Connected');
+        refreshDeviceList();
         fetchEsp32Data(); // Grab immediate snapshot
       });
 
       socket.on('telemetry_update', (d) => {
         state.isDemoMode = false;
+        // If a specific device is selected by the user, ignore other devices
+        if (state.selectedDevice && d.deviceId && d.deviceId !== state.selectedDevice) {
+          return;
+        }
+
         const gasProps = convertGas(d.adc, state.thresholds.voltageDividerRatio);
         const tempVal = (d.temp !== undefined && d.temp !== null) ? Number(d.temp) : 0.0;
         const humVal = (d.hum !== undefined && d.hum !== null) ? Number(d.hum) : 0.0;

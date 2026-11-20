@@ -35,9 +35,17 @@
         <span class="status-label" id="connStatusText">Connecting...</span>
       </div>
 
+      <!-- Multi-Device Cloud Selector -->
+      <div class="device-select-box" style="display:inline-flex; align-items:center; background:rgba(30,41,59,0.8); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:4px 8px; gap:6px;">
+        <i class="fa-solid fa-microchip" style="color:#6366f1; font-size:0.85rem;"></i>
+        <select id="deviceSelector" style="background:transparent; color:#f9fafb; border:none; font-family:inherit; font-size:0.85rem; cursor:pointer; outline:none;">
+          <option value="" style="background:#0f172a; color:#f9fafb;">All Devices (Auto)</option>
+        </select>
+      </div>
+
       <div class="endpoint-input-wrapper">
-        <input type="text" id="espIpInput" placeholder="ESP32 IP or URL (e.g. 192.168.4.1)" title="Enter ESP32 IP or Cloud Server URL">
-        <button id="btnConnect" class="btn btn-primary" title="Connect to ESP32">
+        <input type="text" id="espIpInput" placeholder="ESP32 IP (e.g. 192.168.4.1)" title="Enter local ESP32 IP or Device ID">
+        <button id="btnConnect" class="btn btn-primary" title="Connect to local ESP32 or open directly">
           <i class="fa-solid fa-plug"></i> Connect
         </button>
       </div>
